@@ -258,7 +258,6 @@ const Services = ({ services, settings }: { services: any[], settings: any }) =>
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat',
-      backgroundAttachment: 'fixed',
     } : {}}
   >
     {settings?.services_bg_image && (
@@ -304,7 +303,6 @@ const Team = ({ lawyers, settings }: { lawyers: any[], settings: any }) => {
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',
-        backgroundAttachment: 'fixed',
       } : {}}
     >
       {settings?.team_bg_image && <div className="absolute inset-0 bg-black/60" />}
@@ -404,7 +402,6 @@ const Contact = ({ settings }: { settings: any }) => (
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat',
-      backgroundAttachment: 'fixed',
     } : {}}
   >
     {settings?.contact_bg_image && (
@@ -610,10 +607,10 @@ export default function App() {
         className="min-h-screen relative"
         style={{
           backgroundImage: 'url(https://i.ibb.co/Y7XzXKd2/arkaplan11.png)',
-          backgroundSize: 'cover',
+          backgroundSize: 'contain',
           backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'center',
-          backgroundAttachment: 'fixed',
+          backgroundPosition: 'top center',
+          backgroundAttachment: 'scroll',
           backgroundColor: '#0a0908',
         }}
       >
