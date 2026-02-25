@@ -80,19 +80,14 @@ const Navbar = ({ settings, menus }: { settings: any, menus: any[] }) => {
 
         {/* Desktop Menu - visible when scrolled */}
         <div className="hidden lg:flex gap-8 items-center h-full">
-          {isScrolled && [
-            { href: '/#hakkimizda', label: 'HAKKIMIZDA' },
-            { href: '/#hizmetlerimiz', label: 'HİZMETLERİMİZ' },
-            { href: '/#avukatlarimiz', label: 'AVUKATLARIMIZ' },
-            { href: '/#iletisim', label: 'İLETİŞİM' },
-          ].map(({ href, label }) => (
+          {isScrolled && topMenus.filter(m => !menus.some(sub => sub.parent_id === m.id)).map((menu) => (
             <a
-              key={href}
-              href={href}
-              className="relative text-[10px] font-extrabold tracking-[0.3em] text-gold-200/70 hover:text-gold-300 transition-colors duration-300 uppercase whitespace-nowrap group"
+              key={menu.id}
+              href={menu.path}
+              className="relative text-[10px] font-extrabold tracking-[0.3em] text-gold-200/70 hover:text-gold-300 transition-colors duration-300 uppercase whitespace-nowrap"
               style={{ display: 'inline-block' }}
             >
-              {label}
+              {menu.title}
               <span
                 className="absolute left-0 -bottom-1 h-px bg-gradient-to-r from-gold-500 to-gold-300 w-full origin-left"
                 style={{ transform: 'scaleX(0)', transition: 'transform 0.35s ease' }}
@@ -143,7 +138,7 @@ const Navbar = ({ settings, menus }: { settings: any, menus: any[] }) => {
   );
 };
 
-const Hero = ({ settings }: { settings: any }) => (
+const Hero = ({ settings, menus }: { settings: any, menus: any[] }) => (
   <section className="relative min-h-[100vh] flex flex-col items-center pt-[5vh] text-center px-6">
     <motion.div
       initial={{ opacity: 0, y: 30 }}
@@ -169,19 +164,14 @@ const Hero = ({ settings }: { settings: any }) => (
 
         {/* Navigation Links - Bold + Hover effects */}
         <div className="hidden lg:flex flex-col gap-5 mt-[60px] self-start ml-[-2rem] bg-white/5 backdrop-blur-sm border border-gold-500/15 px-6 py-5 rounded-2xl shadow-xl">
-          {[
-            { href: '/#hakkimizda', label: 'HAKKIMIZDA' },
-            { href: '/#hizmetlerimiz', label: 'HİZMETLERİMİZ' },
-            { href: '/#avukatlarimiz', label: 'AVUKATLARIMIZ' },
-            { href: '/#iletisim', label: 'İLETİŞİM' },
-          ].map(({ href, label }) => (
+          {menus.filter(m => !m.parent_id).map((menu) => (
             <a
-              key={href}
-              href={href}
+              key={menu.id}
+              href={menu.path}
               className="relative text-[11px] font-extrabold tracking-[0.3em] text-gold-200/70 hover:text-gold-300 transition-all duration-300 uppercase whitespace-nowrap group hover:-translate-y-0.5"
               style={{ display: 'inline-block', transition: 'color 0.3s, transform 0.3s' }}
             >
-              {label}
+              {menu.title}
               <span
                 className="absolute left-0 -bottom-1 h-px bg-gradient-to-r from-gold-500 to-gold-300 w-full origin-left"
                 style={{ transform: 'scaleX(0)', transition: 'transform 0.35s ease' }}
@@ -536,9 +526,9 @@ const DynamicPage = () => {
   );
 };
 
-const HomePage = ({ settings, sections, services, lawyers }: { settings: any, sections: any[], services: any[], lawyers: any[] }) => (
+const HomePage = ({ settings, sections, services, lawyers, menus }: { settings: any, sections: any[], services: any[], lawyers: any[], menus: any[] }) => (
   <>
-    <Hero settings={settings} />
+    <Hero settings={settings} menus={menus} />
     <About section={sections.find(s => s.id === 'about')} />
     <Services services={services} settings={settings} />
     <Team lawyers={lawyers} settings={settings} />
@@ -631,7 +621,7 @@ export default function App() {
         <div className="relative z-10">
           <Navbar settings={activeSettings} menus={menus} />
           <Routes>
-            <Route path="/" element={<HomePage settings={activeSettings} sections={sections} services={services} lawyers={lawyers} />} />
+            <Route path="/" element={<HomePage settings={activeSettings} sections={sections} services={services} lawyers={lawyers} menus={menus} />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/p/:slug" element={<DynamicPage />} />
           </Routes>
