@@ -148,11 +148,25 @@ if (settingsCount === 0) {
         { key: 'contact_email', value: 'bilgi@zemahukuk.com' },
         { key: 'social_instagram', value: '#' },
         { key: 'social_facebook', value: '#' },
-        { key: 'social_twitter', value: '#' }
+        { key: 'social_twitter', value: '#' },
+        { key: 'site_bg_image', value: 'https://i.ibb.co/Y7XzXKd2/arkaplan11.png' },
+        { key: 'services_bg_image', value: '' },
+        { key: 'team_bg_image', value: '' },
+        { key: 'contact_bg_image', value: '' }
     ];
 
     const insertSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
     defaultSettings.forEach(s => insertSetting.run(s.key, s.value));
+} else {
+    // Ensure new settings keys exist even if DB already had entries
+    const ensureKeys = [
+        { key: 'site_bg_image', value: 'https://i.ibb.co/Y7XzXKd2/arkaplan11.png' },
+        { key: 'services_bg_image', value: '' },
+        { key: 'team_bg_image', value: '' },
+        { key: 'contact_bg_image', value: '' }
+    ];
+    const insertIfMissing = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
+    ensureKeys.forEach(s => insertIfMissing.run(s.key, s.value));
 }
 
 // Routes

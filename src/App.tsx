@@ -545,6 +545,7 @@ const defaultSettings = {
   social_instagram: '#',
   social_facebook: '#',
   social_twitter: '#',
+  site_bg_image: 'https://i.ibb.co/Y7XzXKd2/arkaplan11.png',
   services_bg_image: '',
   team_bg_image: '',
   contact_bg_image: '',
@@ -606,7 +607,7 @@ export default function App() {
       <div
         className="min-h-screen relative"
         style={{
-          backgroundImage: 'url(https://i.ibb.co/Y7XzXKd2/arkaplan11.png)',
+          backgroundImage: activeSettings.site_bg_image ? `url(${activeSettings.site_bg_image})` : 'none',
           backgroundSize: 'contain',
           backgroundRepeat: 'no-repeat',
           backgroundPosition: 'top center',
