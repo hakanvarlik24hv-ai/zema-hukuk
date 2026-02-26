@@ -168,12 +168,11 @@ const Hero = ({ settings, menus }: { settings: any, menus: any[] }) => (
         <img
           src={settings.site_logo}
           alt="ZEMA Logo"
-          className="w-[85vw] md:w-[38vw] max-w-[560px] h-auto mb-4"
+          className="w-[70vw] md:w-[38vw] max-w-[500px] h-auto mb-2"
           loading="eager"
         />
-        <p className="text-gold-200/80 font-display font-bold tracking-[0.5em] text-[clamp(8px,1vw,12px)] uppercase mb-8 mt-[-10vw] md:mt-[-3rem]">ADALET VE GÜVENİN ADRESİ</p>
-        {/* Button centered under the subtitle */}
-        <a href="#iletisim" className="btn-gold-action group">
+        <p className="text-gold-200/80 font-display font-bold tracking-[0.4em] text-[clamp(7px,1.5vw,12px)] uppercase mb-6 mt-[-6vw] md:mt-[-1.5rem] lg:mt-[-3rem]">ADALET VE GÜVENİN ADRESİ</p>
+        <a href="#iletisim" className="btn-gold-action group scale-90 md:scale-100">
           RANDEVU AL <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
         </a>
       </div>
@@ -217,10 +216,10 @@ const Hero = ({ settings, menus }: { settings: any, menus: any[] }) => (
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 1.5 + (i * 0.2) }}
-            className="p-8 lg:p-12 text-center rounded-[2rem] backdrop-blur-sm bg-white/[0.03] border border-gold-500/[0.05] hover:border-gold-500/30 hover:bg-gold-500/5 hover:-translate-y-2 transition-all duration-500 group shadow-2xl"
+            className="p-6 lg:p-12 text-center rounded-[1.5rem] md:rounded-[2rem] backdrop-blur-sm bg-white/[0.03] border border-gold-500/[0.05] hover:border-gold-500/30 hover:bg-gold-500/5 hover:-translate-y-2 transition-all duration-500 group shadow-2xl"
           >
-            <h3 className="text-base lg:text-lg font-display font-bold text-gold-200 mb-4 tracking-[0.2em] group-hover:text-gold-400 transition-colors uppercase">{card.title}</h3>
-            <p className="text-xs lg:text-sm text-gold-100/40 leading-relaxed font-light">{card.desc}</p>
+            <h3 className="text-sm lg:text-lg font-display font-bold text-gold-200 mb-3 tracking-[0.15em] group-hover:text-gold-400 transition-colors uppercase">{card.title}</h3>
+            <p className="text-[10px] lg:text-sm text-gold-100/40 leading-relaxed font-light">{card.desc}</p>
           </motion.div>
         ))}
       </div>
@@ -319,6 +318,20 @@ const Services = ({ services, settings }: { services: any[], settings: any }) =>
 
 const Team = ({ lawyers, settings }: { lawyers: any[], settings: any }) => {
   const [selected, setSelected] = useState<any>(null);
+
+  useEffect(() => {
+    if (selected) {
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    };
+  }, [selected]);
 
   return (
     <section
@@ -534,7 +547,7 @@ const DynamicPage = () => {
 
   return (
     <div
-      className="min-h-screen pt-40 px-6 pb-20 relative"
+      className="min-h-screen pt-32 md:pt-40 px-4 md:px-6 pb-20 relative"
       style={page.bg_image ? {
         backgroundImage: `url(${page.bg_image})`,
         backgroundSize: 'cover',
@@ -545,8 +558,8 @@ const DynamicPage = () => {
     >
       {page.bg_image && <div className="absolute inset-0 bg-black/70" />}
       <div className="max-w-4xl mx-auto relative z-10">
-        <h1 className="text-5xl font-display font-bold text-gradient-gold mb-12 text-center">{page.title}</h1>
-        <div className="glass-card p-12 leading-relaxed text-gold-100/70 prose-custom max-w-none" dangerouslySetInnerHTML={{ __html: page.content }}></div>
+        <h1 className="text-3xl md:text-5xl font-display font-bold text-gradient-gold mb-8 md:mb-12 text-center">{page.title}</h1>
+        <div className="glass-card p-6 md:p-12 leading-relaxed text-gold-100/70 prose-custom max-w-none" dangerouslySetInnerHTML={{ __html: page.content }}></div>
       </div>
     </div>
   );
@@ -650,12 +663,12 @@ export default function App() {
   return (
     <Router>
       <div
-        className="min-h-screen relative transition-opacity duration-1000 overflow-x-hidden max-w-[100vw]"
+        className="min-h-screen relative transition-opacity duration-1000 overflow-x-hidden w-full"
         style={{
           backgroundImage: activeSettings.site_bg_image && bgLoaded ? `url(${activeSettings.site_bg_image})` : 'none',
-          backgroundSize: '100% auto',
+          backgroundSize: 'cover',
           backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'top center',
+          backgroundPosition: 'center top',
           backgroundAttachment: 'scroll',
           backgroundColor: '#0a0908',
           opacity: bgLoaded ? 1 : 0.9,
@@ -665,7 +678,7 @@ export default function App() {
         <div className="absolute inset-0 bg-black/45 z-[1] pointer-events-none" />
 
         {/* Content Layer */}
-        <div className="relative z-10">
+        <div className="relative z-10 w-full overflow-x-hidden">
           <Navbar settings={activeSettings} menus={menus} />
           <Routes>
             <Route path="/" element={<HomePage settings={activeSettings} sections={sections} services={services} lawyers={lawyers} menus={menus} />} />

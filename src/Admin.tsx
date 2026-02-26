@@ -6,15 +6,16 @@ import {
     fetchMenus, saveMenu, deleteMenu,
     fetchServices, saveService, deleteService,
     fetchLawyers, saveLawyer, deleteLawyer,
-    verifyPassword
+    verifyPassword, exportBackup, importBackup
 } from './api';
 import {
     Save, Plus, Trash2, Edit2, X, Check, Settings,
     FileText, Layout, Menu as MenuIcon, ChevronDown, ChevronRight, Briefcase,
-    Users as TeamIcon, Home, Lock, Eye, EyeOff
+    Users as TeamIcon, Home, Lock, Eye, EyeOff,
+    Download, CloudUpload, RefreshCw
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 
 const Admin = () => {
     const [activeTab, setActiveTab] = useState<'settings' | 'pages' | 'sections' | 'menus' | 'services' | 'lawyers'>('settings');
@@ -30,7 +31,7 @@ const Admin = () => {
     const [editingMenu, setEditingMenu] = useState<any>(null);
     const [editingService, setEditingService] = useState<any>(null);
     const [editingLawyer, setEditingLawyer] = useState<any>(null);
-    const [message, setMessage] = useState('');
+    const [notification, setNotification] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
     // Auth State
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -71,9 +72,9 @@ const Admin = () => {
         }
     };
 
-    const showNotification = (msg: string, isError = false) => {
-        setMessage(msg);
-        setTimeout(() => setMessage(''), 3000);
+    const showNotification = (msg: string, type: 'success' | 'error' = 'success') => {
+        setNotification({ msg, type });
+        setTimeout(() => setNotification(null), 3000);
     };
 
     const handleSettingsSave = async (e: React.FormEvent) => {
@@ -82,7 +83,7 @@ const Admin = () => {
             await updateSettings(settings);
             showNotification('Ayarlar başarıyla kaydedildi.');
         } catch (error) {
-            showNotification('Hata oluştu.', true);
+            showNotification('Hata oluştu.', 'error');
         }
     };
 
@@ -94,7 +95,7 @@ const Admin = () => {
             loadData();
             showNotification('Sayfa başarıyla kaydedildi.');
         } catch (error) {
-            showNotification('Hata oluştu.', true);
+            showNotification('Hata oluştu.', 'error');
         }
     };
 
@@ -106,7 +107,7 @@ const Admin = () => {
             loadData();
             showNotification('Bölüm başarıyla kaydedildi.');
         } catch (error) {
-            showNotification('Hata oluştu.', true);
+            showNotification('Hata oluştu.', 'error');
         }
     };
 
@@ -118,7 +119,7 @@ const Admin = () => {
             loadData();
             showNotification('Menü öğesi başarıyla kaydedildi.');
         } catch (error) {
-            showNotification('Hata oluştu.', true);
+            showNotification('Hata oluştu.', 'error');
         }
     };
 
@@ -130,7 +131,7 @@ const Admin = () => {
             loadData();
             showNotification('Hizmet başarıyla kaydedildi.');
         } catch (error) {
-            showNotification('Hata oluştu.', true);
+            showNotification('Hata oluştu.', 'error');
         }
     };
 
@@ -142,7 +143,7 @@ const Admin = () => {
             loadData();
             showNotification('Avukat kaydı başarıyla oluşturuldu.');
         } catch (error) {
-            showNotification('Hata oluştu.', true);
+            showNotification('Hata oluştu.', 'error');
         }
     };
 
@@ -168,7 +169,7 @@ const Admin = () => {
         e.preventDefault();
         const newPassword = settings.admin_password;
         if (!newPassword || newPassword.length < 4) {
-            showNotification('Şifre en az 4 karakter olmalıdır.', true);
+            showNotification('Şifre en az 4 karakter olmalıdır.', 'error');
             return;
         }
         try {
@@ -176,13 +177,58 @@ const Admin = () => {
             showNotification('Şifre başarıyla güncellendi.');
             // Don't need to reload everything, just the success message
         } catch (error) {
-            showNotification('Hata oluştu veya oturumunuz sona erdi.', true);
+            showNotification('Hata oluştu veya oturumunuz sona erdi.', 'error');
         }
     };
 
     const handleLogout = () => {
         localStorage.removeItem('admin_token');
         window.location.reload();
+    };
+
+    const handleBackupExport = async () => {
+        try {
+            const data = await exportBackup();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `zema-hukuk-yedek-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showNotification('Veriler başarıyla bilgisayarınıza indirildi.');
+        } catch (error) {
+            showNotification('Yedek alınırken hata oluştu.', 'error');
+        }
+    };
+
+    const handleBackupImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!window.confirm('DİKKAT: Mevcut tüm veriler silinecek ve yedek dosyasındaki veriler yüklenecektir. Onaylıyor musunuz?')) {
+            e.target.value = '';
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const data = JSON.parse(event.target?.result as string);
+                const result = await importBackup(data);
+                if (result.success) {
+                    showNotification('Veriler başarıyla yüklendi. Sayfa yenileniyor...');
+                    setTimeout(() => window.location.reload(), 2000);
+                } else {
+                    showNotification(result.error || 'Yükleme başarısız.', 'error');
+                }
+            } catch (error) {
+                showNotification('Geçersiz yedek dosyası.', 'error');
+            }
+        };
+        reader.readAsText(file);
     };
 
     const renderMenus = (parentId: number | null = null, depth = 0) => {
@@ -230,7 +276,7 @@ const Admin = () => {
 
     if (!isAuthenticated) {
         return (
-            <div className="min-h-screen bg-dark-950 flex items-center justify-center p-6 bg-[url('https://i.ibb.co/Y7XzXKd2/arkaplan11.png')] bg-cover bg-fixed">
+            <div className="min-h-screen bg-dark-950 flex items-center justify-center p-6 bg-[url('https://i.ibb.co/Y7XzXKd2/arkaplan11.png')] bg-cover bg-scroll">
                 <div className="absolute inset-0 bg-black/80 backdrop-blur-sm pointer-events-none" />
                 <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
@@ -290,11 +336,22 @@ const Admin = () => {
                 <div className="flex justify-between items-center mb-12">
                     <h1 className="text-4xl font-display font-bold text-gradient-gold">Yönetim Paneli</h1>
                     <div className="flex items-center gap-4">
-                        {message && (
-                            <div className="bg-gold-500/20 border border-gold-500/50 px-4 py-2 rounded text-gold-200 animate-pulse">
-                                {message}
-                            </div>
-                        )}
+                        <AnimatePresence>
+                            {notification && (
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.9, y: -20 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.9, y: -20 }}
+                                    className={`px-6 py-3 rounded-full flex items-center gap-3 shadow-2xl backdrop-blur-md border ${notification.type === 'success'
+                                        ? 'bg-green-500/20 border-green-500/50 text-green-200'
+                                        : 'bg-red-500/20 border-red-500/50 text-red-200'
+                                        }`}
+                                >
+                                    {notification.type === 'success' ? <Check size={18} /> : <X size={18} />}
+                                    <span className="text-xs font-bold tracking-widest uppercase">{notification.msg}</span>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                         <button
                             onClick={handleLogout}
                             className="flex items-center gap-2 px-5 py-3 bg-red-900/10 hover:bg-red-900/20 text-red-500 border border-red-500/20 transition-all font-bold text-xs tracking-widest uppercase"
@@ -377,6 +434,39 @@ const Admin = () => {
                                 </button>
                             </div>
                         </form>
+
+                        {/* Cloud Backup Section */}
+                        <div className="glass-card p-8 space-y-6 border-l-4 border-gold-500/30">
+                            <div className="flex items-center gap-3 mb-4">
+                                <CloudUpload size={20} className="text-gold-500" />
+                                <h2 className="text-xl font-display font-bold text-gold-200 uppercase">BULUT YEDEKLEME VE GERİ YÜKLEME</h2>
+                            </div>
+                            <div className="grid md:grid-cols-2 gap-8">
+                                <div className="space-y-4">
+                                    <h3 className="text-sm font-bold text-gold-400 tracking-widest uppercase">VERİLERİ BULUTA YÜKLE (İNDİR)</h3>
+                                    <p className="text-xs text-gold-100/40 leading-relaxed uppercase tracking-wider">Tüm site ayarlarını, yazılarını ve avukat bilgilerini tek bir dosya olarak bilgisayarınıza yedekler.</p>
+                                    <button
+                                        onClick={handleBackupExport}
+                                        className="flex items-center gap-3 px-6 py-4 bg-gold-600/10 hover:bg-gold-600/20 text-gold-400 border border-gold-500/30 transition-all font-bold text-xs tracking-[0.2em] uppercase"
+                                    >
+                                        <Download size={18} /> YEDEĞİ İNDİR (DIŞA AKTAR)
+                                    </button>
+                                </div>
+                                <div className="space-y-4">
+                                    <h3 className="text-sm font-bold text-gold-400 tracking-widest uppercase">VERİLERİ BULUTTAN YÜKLE (GERİ YÜKLE)</h3>
+                                    <p className="text-xs text-gold-100/40 leading-relaxed uppercase tracking-wider">Daha önce aldığınız bir yedek dosyasını seçerek tüm siteyi eski haline döndürebilirsiniz.</p>
+                                    <label className="flex items-center gap-3 px-6 py-4 bg-white/5 hover:bg-white/10 text-gold-200 border border-gold-500/20 cursor-pointer transition-all font-bold text-xs tracking-[0.2em] uppercase">
+                                        <CloudUpload size={18} /> YEDEK DOSYASI SEÇ
+                                        <input
+                                            type="file"
+                                            accept=".json"
+                                            className="hidden"
+                                            onChange={handleBackupImport}
+                                        />
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
 

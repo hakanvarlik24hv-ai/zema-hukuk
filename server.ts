@@ -401,6 +401,89 @@ app.delete('/api/lawyers/:id', authMiddleware, (req, res) => {
     res.json({ success: true });
 });
 
+// --- Cloud Backup & Restore ---
+
+// Export all data
+app.get('/api/backup/export', authMiddleware, (req, res) => {
+    try {
+        const data = {
+            settings: db.prepare('SELECT * FROM settings').all(),
+            pages: db.prepare('SELECT * FROM pages').all(),
+            sections: db.prepare('SELECT * FROM sections').all(),
+            menus: db.prepare('SELECT * FROM menus').all(),
+            services: db.prepare('SELECT * FROM services').all(),
+            lawyers: db.prepare('SELECT * FROM lawyers').all(),
+            export_date: new Date().toISOString(),
+            version: '1.0'
+        };
+        res.json(data);
+    } catch (error) {
+        console.error('Export error:', error);
+        res.status(500).json({ error: 'Veri dışa aktarılırken hata oluştu.' });
+    }
+});
+
+// Import all data
+app.post('/api/backup/import', authMiddleware, (req, res) => {
+    const data = req.body;
+
+    if (!data || !data.settings || !Array.isArray(data.settings)) {
+        return res.status(400).json({ error: 'Geçersiz yedek dosyası formatı.' });
+    }
+
+    const transaction = db.transaction(() => {
+        // Clear current data
+        db.prepare('DELETE FROM settings').run();
+        db.prepare('DELETE FROM pages').run();
+        db.prepare('DELETE FROM sections').run();
+        db.prepare('DELETE FROM menus').run();
+        db.prepare('DELETE FROM services').run();
+        db.prepare('DELETE FROM lawyers').run();
+
+        // Re-insert settings (key, value)
+        const insertSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
+        data.settings.forEach((s: any) => insertSetting.run(s.key, s.value));
+
+        // Re-insert pages
+        if (data.pages && Array.isArray(data.pages)) {
+            const insertPage = db.prepare('INSERT INTO pages (id, title, slug, content, bg_image, is_active) VALUES (?, ?, ?, ?, ?, ?)');
+            data.pages.forEach((p: any) => insertPage.run(p.id, p.title, p.slug, p.content, p.bg_image, p.is_active));
+        }
+
+        // Re-insert sections
+        if (data.sections && Array.isArray(data.sections)) {
+            const insertSection = db.prepare('INSERT INTO sections (id, title, subtitle, content, image_url) VALUES (?, ?, ?, ?, ?)');
+            data.sections.forEach((s: any) => insertSection.run(s.id, s.title, s.subtitle, s.content, s.image_url));
+        }
+
+        // Re-insert menus
+        if (data.menus && Array.isArray(data.menus)) {
+            const insertMenu = db.prepare('INSERT INTO menus (id, title, path, parent_id, sort_order) VALUES (?, ?, ?, ?, ?)');
+            data.menus.forEach((m: any) => insertMenu.run(m.id, m.title, m.path, m.parent_id, m.sort_order));
+        }
+
+        // Re-insert services
+        if (data.services && Array.isArray(data.services)) {
+            const insertService = db.prepare('INSERT INTO services (id, title, description, icon, sort_order) VALUES (?, ?, ?, ?, ?)');
+            data.services.forEach((s: any) => insertService.run(s.id, s.title, s.description, s.icon, s.sort_order));
+        }
+
+        // Re-insert lawyers
+        if (data.lawyers && Array.isArray(data.lawyers)) {
+            const insertLawyer = db.prepare('INSERT INTO lawyers (id, name, title, bio, image_url, sort_order) VALUES (?, ?, ?, ?, ?, ?)');
+            data.lawyers.forEach((l: any) => insertLawyer.run(l.id, l.name, l.title, l.bio, l.image_url, l.sort_order));
+        }
+    });
+
+    try {
+        transaction();
+        res.json({ success: true, message: 'Veriler başarıyla geri yüklendi.' });
+    } catch (error) {
+        console.error('Import error:', error);
+        res.status(500).json({ error: 'Veriler geri yüklenirken hata oluştu.' });
+    }
+});
+
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
 });

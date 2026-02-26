@@ -86,3 +86,9 @@ export const saveLawyer = async (lawyer: any) => {
     return secureFetch(url, { method, body: JSON.stringify(lawyer) });
 };
 export const deleteLawyer = async (id: number) => secureFetch(`${API_BASE}/api/lawyers/${id}`, { method: 'DELETE' });
+
+export const exportBackup = async () => secureFetch(`${API_BASE}/api/backup/export`);
+export const importBackup = async (data: any) => secureFetch(`${API_BASE}/api/backup/import`, {
+    method: 'POST',
+    body: JSON.stringify(data)
+});
