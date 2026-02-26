@@ -1,8 +1,13 @@
+let authToken = localStorage.getItem('admin_token') || '';
 const API_BASE = import.meta.env.VITE_API_URL || '';
-let authToken = '';
 
 export const setAuthToken = (token: string) => {
     authToken = token;
+    if (token) {
+        localStorage.setItem('admin_token', token);
+    } else {
+        localStorage.removeItem('admin_token');
+    }
 };
 
 const secureFetch = async (url: string, options: any = {}) => {
@@ -10,12 +15,16 @@ const secureFetch = async (url: string, options: any = {}) => {
         'Content-Type': 'application/json',
         ...options.headers,
     };
-    
+
     if (authToken) {
         headers['Authorization'] = authToken;
     }
-    
+
     const response = await fetch(url, { ...options, headers });
+    if (response.status === 401 || response.status === 403) {
+        // If unauthorized, clear token
+        setAuthToken('');
+    }
     return response.json();
 };
 

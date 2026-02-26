@@ -40,6 +40,10 @@ const Admin = () => {
     const [isDataLoading, setIsDataLoading] = useState(true);
 
     useEffect(() => {
+        const token = localStorage.getItem('admin_token');
+        if (token) {
+            setIsAuthenticated(true);
+        }
         loadData();
     }, []);
 
@@ -170,9 +174,15 @@ const Admin = () => {
         try {
             await updateSettings({ admin_password: newPassword });
             showNotification('Şifre başarıyla güncellendi.');
+            // Don't need to reload everything, just the success message
         } catch (error) {
-            showNotification('Hata oluştu.', true);
+            showNotification('Hata oluştu veya oturumunuz sona erdi.', true);
         }
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('admin_token');
+        window.location.reload();
     };
 
     const renderMenus = (parentId: number | null = null, depth = 0) => {
@@ -285,12 +295,12 @@ const Admin = () => {
                                 {message}
                             </div>
                         )}
-                        <Link
-                            to="/"
-                            className="flex items-center gap-2 px-5 py-3 bg-white/5 hover:bg-white/10 text-gold-400 hover:text-gold-200 border border-gold-500/20 hover:border-gold-500/50 transition-all font-bold text-xs tracking-widest uppercase"
+                        <button
+                            onClick={handleLogout}
+                            className="flex items-center gap-2 px-5 py-3 bg-red-900/10 hover:bg-red-900/20 text-red-500 border border-red-500/20 transition-all font-bold text-xs tracking-widest uppercase"
                         >
-                            <Home size={16} /> SİTEYE DÖN
-                        </Link>
+                            ÇIKIŞ YAP
+                        </button>
                     </div>
                 </div>
 

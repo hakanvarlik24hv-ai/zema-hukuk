@@ -182,13 +182,22 @@ app.get('/api/settings', (req, res) => {
 
 // Middleware to verify admin password for sensitive operations
 const authMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const authHeader = req.headers.authorization;
-    const adminPassword = db.prepare("SELECT value FROM settings WHERE key = 'admin_password'").get() as any;
+    // Check both standard 'authorization' and any capitalized variants
+    const authHeader = req.headers.authorization || req.get('Authorization');
 
-    if (authHeader && authHeader === adminPassword?.value) {
-        next();
-    } else {
-        res.status(403).json({ error: 'Unauthorized: Admin access required' });
+    try {
+        const adminSetting = db.prepare("SELECT value FROM settings WHERE key = 'admin_password'").get() as any;
+        const expectedPassword = adminSetting?.value;
+
+        if (authHeader && expectedPassword && authHeader === expectedPassword) {
+            next();
+        } else {
+            console.warn(`Auth failed: header=${!!authHeader}, match=${authHeader === expectedPassword}`);
+            res.status(403).json({ error: 'Yetkisiz erişim: Lütfen tekrar giriş yapın.' });
+        }
+    } catch (err) {
+        console.error('Auth middleware error:', err);
+        res.status(500).json({ error: 'Sunucu hatası' });
     }
 };
 
