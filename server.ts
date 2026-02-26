@@ -2,13 +2,9 @@ import express from 'express';
 import Database from 'better-sqlite3';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -152,7 +148,8 @@ if (settingsCount === 0) {
         { key: 'site_bg_image', value: 'https://i.ibb.co/Y7XzXKd2/arkaplan11.png' },
         { key: 'services_bg_image', value: '' },
         { key: 'team_bg_image', value: '' },
-        { key: 'contact_bg_image', value: '' }
+        { key: 'contact_bg_image', value: '' },
+        { key: 'admin_password', value: 'admin123' }
     ];
 
     const insertSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
@@ -163,7 +160,8 @@ if (settingsCount === 0) {
         { key: 'site_bg_image', value: 'https://i.ibb.co/Y7XzXKd2/arkaplan11.png' },
         { key: 'services_bg_image', value: '' },
         { key: 'team_bg_image', value: '' },
-        { key: 'contact_bg_image', value: '' }
+        { key: 'contact_bg_image', value: '' },
+        { key: 'admin_password', value: 'admin123' }
     ];
     const insertIfMissing = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
     ensureKeys.forEach(s => insertIfMissing.run(s.key, s.value));
@@ -173,13 +171,66 @@ if (settingsCount === 0) {
 app.get('/api/settings', (req, res) => {
     const settings = db.prepare('SELECT * FROM settings').all();
     const settingsMap = settings.reduce((acc: any, curr: any) => {
-        acc[curr.key] = curr.value;
+        // SECURITY: Never send admin_password to the client
+        if (curr.key !== 'admin_password') {
+            acc[curr.key] = curr.value;
+        }
         return acc;
     }, {});
     res.json(settingsMap);
 });
 
-app.post('/api/settings', (req, res) => {
+// Middleware to verify admin password for sensitive operations
+const authMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const authHeader = req.headers.authorization;
+    const adminPassword = db.prepare("SELECT value FROM settings WHERE key = 'admin_password'").get() as any;
+
+    if (authHeader && authHeader === adminPassword?.value) {
+        next();
+    } else {
+        res.status(403).json({ error: 'Unauthorized: Admin access required' });
+    }
+};
+
+const loginAttempts: Record<string, { count: number, lastAttempt: number }> = {};
+
+app.post('/api/verify-password', (req, res) => {
+    const ip = req.ip || 'unknown';
+    const now = Date.now();
+
+    // Clean up old attempts (older than 10 mins)
+    if (loginAttempts[ip] && now - loginAttempts[ip].lastAttempt > 600000) {
+        delete loginAttempts[ip];
+    }
+
+    if (loginAttempts[ip] && loginAttempts[ip].count >= 5) {
+        return res.status(429).json({ success: false, error: 'Çok fazla deneme yaptınız. 10 dakika sonra tekrar deneyin.' });
+    }
+
+    try {
+        const { password } = req.body;
+        if (!password) {
+            return res.status(400).json({ success: false, error: 'Şifre gereklidir' });
+        }
+
+        const adminPassword = db.prepare("SELECT value FROM settings WHERE key = 'admin_password'").get() as any;
+
+        if (adminPassword && password === adminPassword.value) {
+            delete loginAttempts[ip];
+            res.json({ success: true });
+        } else {
+            loginAttempts[ip] = {
+                count: (loginAttempts[ip]?.count || 0) + 1,
+                lastAttempt: now
+            };
+            res.status(401).json({ success: false, error: 'Hatalı şifre' });
+        }
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: 'Sunucu hatası' });
+    }
+});
+
+app.post('/api/settings', authMiddleware, (req, res) => {
     const updates = req.body;
     const updateSetting = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
 
@@ -207,7 +258,7 @@ app.get('/api/pages/:slug', (req, res) => {
     }
 });
 
-app.post('/api/pages', (req, res) => {
+app.post('/api/pages', authMiddleware, (req, res) => {
     const { title, slug, content, bg_image } = req.body;
     try {
         const info = db.prepare('INSERT INTO pages (title, slug, content, bg_image) VALUES (?, ?, ?, ?)').run(title, slug, content, bg_image || '');
@@ -217,7 +268,7 @@ app.post('/api/pages', (req, res) => {
     }
 });
 
-app.put('/api/pages/:id', (req, res) => {
+app.put('/api/pages/:id', authMiddleware, (req, res) => {
     const { title, slug, content, bg_image, is_active } = req.body;
     try {
         db.prepare('UPDATE pages SET title = ?, slug = ?, content = ?, bg_image = ?, is_active = ? WHERE id = ?').run(title, slug, content, bg_image || '', is_active, req.params.id);
@@ -227,7 +278,7 @@ app.put('/api/pages/:id', (req, res) => {
     }
 });
 
-app.delete('/api/pages/:id', (req, res) => {
+app.delete('/api/pages/:id', authMiddleware, (req, res) => {
     db.prepare('DELETE FROM pages WHERE id = ?').run(req.params.id);
     res.json({ success: true });
 });
@@ -238,7 +289,7 @@ app.get('/api/sections', (req, res) => {
     res.json(sections);
 });
 
-app.put('/api/sections/:id', (req, res) => {
+app.put('/api/sections/:id', authMiddleware, (req, res) => {
     const { title, subtitle, content, image_url } = req.body;
     try {
         db.prepare('UPDATE sections SET title = ?, subtitle = ?, content = ?, image_url = ? WHERE id = ?').run(title, subtitle, content, image_url, req.params.id);
@@ -254,7 +305,7 @@ app.get('/api/menus', (req, res) => {
     res.json(menus);
 });
 
-app.post('/api/menus', (req, res) => {
+app.post('/api/menus', authMiddleware, (req, res) => {
     const { title, path, parent_id, sort_order } = req.body;
     try {
         const info = db.prepare('INSERT INTO menus (title, path, parent_id, sort_order) VALUES (?, ?, ?, ?)').run(title, path, parent_id || null, sort_order || 0);
@@ -264,7 +315,7 @@ app.post('/api/menus', (req, res) => {
     }
 });
 
-app.put('/api/menus/:id', (req, res) => {
+app.put('/api/menus/:id', authMiddleware, (req, res) => {
     const { title, path, parent_id, sort_order } = req.body;
     try {
         db.prepare('UPDATE menus SET title = ?, path = ?, parent_id = ?, sort_order = ? WHERE id = ?').run(title, path, parent_id || null, sort_order || 0, req.params.id);
@@ -274,7 +325,7 @@ app.put('/api/menus/:id', (req, res) => {
     }
 });
 
-app.delete('/api/menus/:id', (req, res) => {
+app.delete('/api/menus/:id', authMiddleware, (req, res) => {
     db.prepare('DELETE FROM menus WHERE id = ?').run(req.params.id);
     res.json({ success: true });
 });
@@ -285,7 +336,7 @@ app.get('/api/services', (req, res) => {
     res.json(services);
 });
 
-app.post('/api/services', (req, res) => {
+app.post('/api/services', authMiddleware, (req, res) => {
     const { title, description, icon, sort_order } = req.body;
     try {
         const info = db.prepare('INSERT INTO services (title, description, icon, sort_order) VALUES (?, ?, ?, ?)').run(title, description, icon, sort_order || 0);
@@ -295,7 +346,7 @@ app.post('/api/services', (req, res) => {
     }
 });
 
-app.put('/api/services/:id', (req, res) => {
+app.put('/api/services/:id', authMiddleware, (req, res) => {
     const { title, description, icon, sort_order } = req.body;
     try {
         db.prepare('UPDATE services SET title = ?, description = ?, icon = ?, sort_order = ? WHERE id = ?').run(title, description, icon, sort_order, req.params.id);
@@ -305,7 +356,7 @@ app.put('/api/services/:id', (req, res) => {
     }
 });
 
-app.delete('/api/services/:id', (req, res) => {
+app.delete('/api/services/:id', authMiddleware, (req, res) => {
     db.prepare('DELETE FROM services WHERE id = ?').run(req.params.id);
     res.json({ success: true });
 });
@@ -316,7 +367,7 @@ app.get('/api/lawyers', (req, res) => {
     res.json(lawyers);
 });
 
-app.post('/api/lawyers', (req, res) => {
+app.post('/api/lawyers', authMiddleware, (req, res) => {
     const { name, title, bio, image_url, sort_order } = req.body;
     try {
         const info = db.prepare('INSERT INTO lawyers (name, title, bio, image_url, sort_order) VALUES (?, ?, ?, ?, ?)').run(name, title, bio, image_url, sort_order || 0);
@@ -326,7 +377,7 @@ app.post('/api/lawyers', (req, res) => {
     }
 });
 
-app.put('/api/lawyers/:id', (req, res) => {
+app.put('/api/lawyers/:id', authMiddleware, (req, res) => {
     const { name, title, bio, image_url, sort_order } = req.body;
     try {
         db.prepare('UPDATE lawyers SET name = ?, title = ?, bio = ?, image_url = ?, sort_order = ? WHERE id = ?').run(name, title, bio, image_url, sort_order, req.params.id);
@@ -336,7 +387,7 @@ app.put('/api/lawyers/:id', (req, res) => {
     }
 });
 
-app.delete('/api/lawyers/:id', (req, res) => {
+app.delete('/api/lawyers/:id', authMiddleware, (req, res) => {
     db.prepare('DELETE FROM lawyers WHERE id = ?').run(req.params.id);
     res.json({ success: true });
 });

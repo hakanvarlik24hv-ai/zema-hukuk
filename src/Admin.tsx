@@ -5,14 +5,16 @@ import {
     fetchSections, updateSection,
     fetchMenus, saveMenu, deleteMenu,
     fetchServices, saveService, deleteService,
-    fetchLawyers, saveLawyer, deleteLawyer
+    fetchLawyers, saveLawyer, deleteLawyer,
+    verifyPassword
 } from './api';
 import {
     Save, Plus, Trash2, Edit2, X, Check, Settings,
     FileText, Layout, Menu as MenuIcon, ChevronDown, ChevronRight, Briefcase,
-    Users as TeamIcon, Home
+    Users as TeamIcon, Home, Lock, Eye, EyeOff
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { motion } from 'motion/react';
 
 const Admin = () => {
     const [activeTab, setActiveTab] = useState<'settings' | 'pages' | 'sections' | 'menus' | 'services' | 'lawyers'>('settings');
@@ -30,11 +32,19 @@ const Admin = () => {
     const [editingLawyer, setEditingLawyer] = useState<any>(null);
     const [message, setMessage] = useState('');
 
+    // Auth State
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [passwordInput, setPasswordInput] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [loginError, setLoginError] = useState('');
+    const [isDataLoading, setIsDataLoading] = useState(true);
+
     useEffect(() => {
         loadData();
     }, []);
 
     const loadData = async () => {
+        setIsDataLoading(true);
         try {
             const [settingsData, pagesData, sectionsData, menusData, servicesData, lawyersData] = await Promise.all([
                 fetchSettings(),
@@ -52,6 +62,8 @@ const Admin = () => {
             setLawyers(lawyersData);
         } catch (error) {
             console.error('Error loading data:', error);
+        } finally {
+            setIsDataLoading(false);
         }
     };
 
@@ -130,43 +142,137 @@ const Admin = () => {
         }
     };
 
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (isDataLoading) return;
+
+        try {
+            const result = await verifyPassword(passwordInput);
+            if (result.success) {
+                setIsAuthenticated(true);
+                setLoginError('');
+            } else {
+                setLoginError('Hatalı şifre. Lütfen tekrar deneyiniz.');
+            }
+        } catch (error) {
+            setLoginError('Doğrulama sırasında bir hata oluştu.');
+        }
+    };
+
+    const handlePasswordChange = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const newPassword = settings.admin_password;
+        if (!newPassword || newPassword.length < 4) {
+            showNotification('Şifre en az 4 karakter olmalıdır.', true);
+            return;
+        }
+        try {
+            await updateSettings({ admin_password: newPassword });
+            showNotification('Şifre başarıyla güncellendi.');
+        } catch (error) {
+            showNotification('Hata oluştu.', true);
+        }
+    };
+
     const renderMenus = (parentId: number | null = null, depth = 0) => {
-        return menus
-            .filter(m => m.parent_id === parentId)
-            .map(menu => (
-                <React.Fragment key={menu.id}>
-                    <div
-                        className="glass-card p-4 flex justify-between items-center group transition-all"
-                        style={{ marginLeft: `${depth * 2}rem` }}
-                    >
-                        <div className="flex items-center gap-3">
-                            {depth > 0 && <ChevronRight size={16} className="text-gold-500/40" />}
-                            <div>
-                                <h3 className="text-gold-200 font-display font-bold tracking-wider">{menu.title}</h3>
-                                <p className="text-xs text-gold-500/40 tracking-widest">{menu.path}</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => setEditingMenu(menu)} className="p-2 text-gold-500 hover:text-gold-200">
-                                <Edit2 size={18} />
-                            </button>
-                            <button
-                                onClick={async () => {
-                                    if (window.confirm('Emin misiniz? Alt menüler de silinecektir.')) {
-                                        await deleteMenu(menu.id);
-                                        loadData();
-                                    }
-                                }}
-                                className="p-2 text-red-500 hover:text-red-400"
-                            >
-                                <Trash2 size={18} />
-                            </button>
+        const items = menus.filter(m => (m.parent_id === parentId || (!parentId && !m.parent_id)));
+
+        // If we are looking for children, but parentId is something, filter correctly
+        const filteredItems = parentId === null
+            ? menus.filter(m => !m.parent_id)
+            : menus.filter(m => m.parent_id === parentId);
+
+        return filteredItems.map(menu => (
+            <React.Fragment key={menu.id}>
+                <div
+                    className="glass-card p-4 flex justify-between items-center group transition-all mb-2"
+                    style={{ marginLeft: `${depth * 2.5}rem`, borderLeft: depth > 0 ? '2px solid rgba(184, 138, 62, 0.3)' : 'none' }}
+                >
+                    <div className="flex items-center gap-3">
+                        {depth > 0 && <ChevronRight size={16} className="text-gold-500/40" />}
+                        <div>
+                            <h3 className="text-gold-200 font-display font-bold tracking-wider">{menu.title}</h3>
+                            <p className="text-xs text-gold-500/40 tracking-widest">{menu.path}</p>
                         </div>
                     </div>
-                    {renderMenus(menu.id, depth + 1)}
-                </React.Fragment>
-            ));
+                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => setEditingMenu(menu)} className="p-2 text-gold-500 hover:text-gold-200">
+                            <Edit2 size={18} />
+                        </button>
+                        <button
+                            onClick={async () => {
+                                if (window.confirm('Emin misiniz? Alt menüler de silinecektir.')) {
+                                    await deleteMenu(menu.id);
+                                    loadData();
+                                }
+                            }}
+                            className="p-2 text-red-500 hover:text-red-400"
+                        >
+                            <Trash2 size={18} />
+                        </button>
+                    </div>
+                </div>
+                {renderMenus(menu.id, depth + 1)}
+            </React.Fragment>
+        ));
     };
+
+    if (!isAuthenticated) {
+        return (
+            <div className="min-h-screen bg-dark-950 flex items-center justify-center p-6 bg-[url('https://i.ibb.co/Y7XzXKd2/arkaplan11.png')] bg-cover bg-fixed">
+                <div className="absolute inset-0 bg-black/80 backdrop-blur-sm pointer-events-none" />
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="relative glass-card w-full max-w-md p-10 space-y-8 z-10"
+                >
+                    <div className="text-center">
+                        <div className="w-20 h-20 bg-gold-500/10 border border-gold-500/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <Lock size={32} className="text-gold-500" />
+                        </div>
+                        <h1 className="text-3xl font-display font-bold text-gradient-gold mb-2 uppercase">GİRİŞ YAP</h1>
+                        <p className="text-gold-100/40 text-sm">Yönetim paneline erişmek için şifrenizi giriniz.</p>
+                    </div>
+
+                    <form onSubmit={handleLogin} className="space-y-6">
+                        <div className="space-y-2 relative">
+                            <label className="text-[10px] font-bold text-gold-500 tracking-[0.3em] uppercase">ADMİN ŞİFRE</label>
+                            <div className="relative">
+                                <input
+                                    type={showPassword ? "text" : "password"}
+                                    value={passwordInput}
+                                    onChange={(e) => setPasswordInput(e.target.value)}
+                                    className="w-full bg-black/40 border border-gold-500/20 p-4 text-gold-100 focus:border-gold-500 outline-none transition-all pr-12"
+                                    placeholder="••••••••"
+                                    autoFocus
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gold-500/50 hover:text-gold-500 transition-colors"
+                                >
+                                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                                </button>
+                            </div>
+                            {loginError && <p className="text-red-500 text-[10px] font-bold mt-2 uppercase tracking-widest">{loginError}</p>}
+                        </div>
+                        <button
+                            type="submit"
+                            disabled={isDataLoading}
+                            className={`btn-gold-action w-full justify-center ${isDataLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                            {isDataLoading ? 'YÜKLENİYOR...' : 'GİRİŞ YAP'} {!isDataLoading && <Check size={18} />}
+                        </button>
+                    </form>
+
+                    <div className="text-center pt-4">
+                        <Link to="/" className="text-[10px] text-gold-500/40 hover:text-gold-500 tracking-widest uppercase transition-colors">Ana Sayfaya Dön</Link>
+                    </div>
+                </motion.div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-dark-950 text-gold-100 p-8 pt-24">
@@ -209,24 +315,59 @@ const Admin = () => {
 
                 {/* Settings Tab */}
                 {activeTab === 'settings' && (
-                    <form onSubmit={handleSettingsSave} className="glass-card p-8 space-y-6">
-                        <div className="grid md:grid-cols-2 gap-6">
-                            {Object.keys(settings).map((key) => (
-                                <div key={key} className="space-y-2">
-                                    <label className="text-xs font-bold tracking-widest text-gold-500 uppercase">{key.replace('_', ' ')}</label>
-                                    <input
-                                        type="text"
-                                        value={settings[key] || ''}
-                                        onChange={(e) => setSettings({ ...settings, [key]: e.target.value })}
-                                        className="w-full bg-black/40 border border-gold-500/20 p-3 text-gold-100 focus:border-gold-500 outline-none"
-                                    />
+                    <div className="space-y-8">
+                        <form onSubmit={handleSettingsSave} className="glass-card p-8 space-y-6">
+                            <h2 className="text-xl font-display font-bold text-gold-200 mb-4 border-b border-gold-500/10 pb-4">GENEL AYARLAR</h2>
+                            <div className="grid md:grid-cols-2 gap-6">
+                                {Object.keys(settings).filter(key => key !== 'admin_password').map((key) => (
+                                    <div key={key} className="space-y-2">
+                                        <label className="text-xs font-bold tracking-widest text-gold-500 uppercase">{key.replace('_', ' ')}</label>
+                                        <input
+                                            type="text"
+                                            value={settings[key] || ''}
+                                            onChange={(e) => setSettings({ ...settings, [key]: e.target.value })}
+                                            className="w-full bg-black/40 border border-gold-500/20 p-3 text-gold-100 focus:border-gold-500 outline-none"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                            <button type="submit" className="btn-gold-action w-full justify-center">
+                                <Save size={20} /> AYARLARI KAYDET
+                            </button>
+                        </form>
+
+                        <form onSubmit={handlePasswordChange} className="glass-card p-8 space-y-6 border-l-4 border-red-500/30">
+                            <div className="flex items-center gap-3 mb-4">
+                                <Lock size={20} className="text-red-500" />
+                                <h2 className="text-xl font-display font-bold text-gold-200">GÜVENLİK VE ŞİFRE</h2>
+                            </div>
+                            <div className="max-w-md space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold tracking-widest text-gold-500 uppercase">YENİ ADMİN ŞİFRESİ</label>
+                                    <div className="relative">
+                                        <input
+                                            type={showPassword ? "text" : "password"}
+                                            value={settings.admin_password || ''}
+                                            onChange={(e) => setSettings({ ...settings, admin_password: e.target.value })}
+                                            className="w-full bg-black/40 border border-gold-500/20 p-3 text-gold-100 focus:border-gold-500 outline-none pr-12"
+                                            placeholder="Yeni şifre giriniz"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gold-500/50 hover:text-gold-500"
+                                        >
+                                            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] text-gold-500/40 uppercase tracking-widest">En az 4 karakterden oluşan güvenli bir şifre belirleyiniz.</p>
                                 </div>
-                            ))}
-                        </div>
-                        <button type="submit" className="btn-gold-action w-full justify-center">
-                            <Save size={20} /> AYARLARI KAYDET
-                        </button>
-                    </form>
+                                <button type="submit" className="bg-red-900/20 border border-red-500/30 text-red-500 px-6 py-3 font-bold text-xs tracking-widest uppercase hover:bg-red-900/40 transition-all flex items-center gap-2">
+                                    <Lock size={16} /> ŞİFREYİ GÜNCELLE
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 )}
 
                 {/* Menus Tab */}

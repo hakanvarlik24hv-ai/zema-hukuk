@@ -1,126 +1,79 @@
 const API_BASE = import.meta.env.VITE_API_URL || '';
+let authToken = '';
 
-export const fetchSettings = async () => {
-    const response = await fetch(`${API_BASE}/api/settings`);
+export const setAuthToken = (token: string) => {
+    authToken = token;
+};
+
+const secureFetch = async (url: string, options: any = {}) => {
+    const headers = {
+        'Content-Type': 'application/json',
+        ...options.headers,
+    };
+    
+    if (authToken) {
+        headers['Authorization'] = authToken;
+    }
+    
+    const response = await fetch(url, { ...options, headers });
     return response.json();
 };
 
-export const updateSettings = async (settings: any) => {
-    const response = await fetch(`${API_BASE}/api/settings`, {
+export const fetchSettings = async () => secureFetch(`${API_BASE}/api/settings`);
+
+export const updateSettings = async (settings: any) => secureFetch(`${API_BASE}/api/settings`, {
+    method: 'POST',
+    body: JSON.stringify(settings)
+});
+
+export const verifyPassword = async (password: string) => {
+    const response = await fetch(`${API_BASE}/api/verify-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings)
+        body: JSON.stringify({ password })
     });
-    return response.json();
+    const data = await response.json();
+    if (data.success) {
+        setAuthToken(password);
+    }
+    return data;
 };
 
-export const fetchPages = async () => {
-    const response = await fetch(`${API_BASE}/api/pages`);
-    return response.json();
-};
-
-export const fetchPageBySlug = async (slug: string) => {
-    const response = await fetch(`${API_BASE}/api/pages/${slug}`);
-    return response.json();
-};
-
+export const fetchPages = async () => secureFetch(`${API_BASE}/api/pages`);
+export const fetchPageBySlug = async (slug: string) => secureFetch(`${API_BASE}/api/pages/${slug}`);
 export const savePage = async (page: any) => {
     const method = page.id ? 'PUT' : 'POST';
     const url = page.id ? `${API_BASE}/api/pages/${page.id}` : `${API_BASE}/api/pages`;
-    const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(page)
-    });
-    return response.json();
+    return secureFetch(url, { method, body: JSON.stringify(page) });
 };
+export const deletePage = async (id: number) => secureFetch(`${API_BASE}/api/pages/${id}`, { method: 'DELETE' });
 
-export const deletePage = async (id: number) => {
-    const response = await fetch(`${API_BASE}/api/pages/${id}`, {
-        method: 'DELETE'
-    });
-    return response.json();
-};
+export const fetchSections = async () => secureFetch(`${API_BASE}/api/sections`);
+export const updateSection = async (id: string, section: any) => secureFetch(`${API_BASE}/api/sections/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(section)
+});
 
-export const fetchSections = async () => {
-    const response = await fetch(`${API_BASE}/api/sections`);
-    return response.json();
-};
-
-export const updateSection = async (id: string, section: any) => {
-    const response = await fetch(`${API_BASE}/api/sections/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(section)
-    });
-    return response.json();
-};
-
-export const fetchMenus = async () => {
-    const response = await fetch(`${API_BASE}/api/menus`);
-    return response.json();
-};
-
+export const fetchMenus = async () => secureFetch(`${API_BASE}/api/menus`);
 export const saveMenu = async (menu: any) => {
     const method = menu.id ? 'PUT' : 'POST';
     const url = menu.id ? `${API_BASE}/api/menus/${menu.id}` : `${API_BASE}/api/menus`;
-    const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(menu)
-    });
-    return response.json();
+    return secureFetch(url, { method, body: JSON.stringify(menu) });
 };
+export const deleteMenu = async (id: number) => secureFetch(`${API_BASE}/api/menus/${id}`, { method: 'DELETE' });
 
-export const deleteMenu = async (id: number) => {
-    const response = await fetch(`${API_BASE}/api/menus/${id}`, {
-        method: 'DELETE'
-    });
-    return response.json();
-};
-
-export const fetchServices = async () => {
-    const response = await fetch(`${API_BASE}/api/services`);
-    return response.json();
-};
-
+export const fetchServices = async () => secureFetch(`${API_BASE}/api/services`);
 export const saveService = async (service: any) => {
     const method = service.id ? 'PUT' : 'POST';
     const url = service.id ? `${API_BASE}/api/services/${service.id}` : `${API_BASE}/api/services`;
-    const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(service)
-    });
-    return response.json();
+    return secureFetch(url, { method, body: JSON.stringify(service) });
 };
+export const deleteService = async (id: number) => secureFetch(`${API_BASE}/api/services/${id}`, { method: 'DELETE' });
 
-export const deleteService = async (id: number) => {
-    const response = await fetch(`${API_BASE}/api/services/${id}`, {
-        method: 'DELETE'
-    });
-    return response.json();
-};
-
-export const fetchLawyers = async () => {
-    const response = await fetch(`${API_BASE}/api/lawyers`);
-    return response.json();
-};
-
+export const fetchLawyers = async () => secureFetch(`${API_BASE}/api/lawyers`);
 export const saveLawyer = async (lawyer: any) => {
     const method = lawyer.id ? 'PUT' : 'POST';
     const url = lawyer.id ? `${API_BASE}/api/lawyers/${lawyer.id}` : `${API_BASE}/api/lawyers`;
-    const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(lawyer)
-    });
-    return response.json();
+    return secureFetch(url, { method, body: JSON.stringify(lawyer) });
 };
-
-export const deleteLawyer = async (id: number) => {
-    const response = await fetch(`${API_BASE}/api/lawyers/${id}`, {
-        method: 'DELETE'
-    });
-    return response.json();
-};
+export const deleteLawyer = async (id: number) => secureFetch(`${API_BASE}/api/lawyers/${id}`, { method: 'DELETE' });

@@ -26,5 +26,18 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    build: {
+      reportCompressedSize: false,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-motion': ['motion'],
+            'vendor-lucide': ['lucide-react'],
+          },
+        },
+      },
+      chunkSizeWarningLimit: 1000,
+    },
   };
 });

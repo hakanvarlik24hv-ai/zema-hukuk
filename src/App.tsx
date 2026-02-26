@@ -12,7 +12,8 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { BrowserRouter as Router, Routes, Route, Link, useParams } from 'react-router-dom';
 import { fetchSettings, fetchPages, fetchPageBySlug, fetchMenus, fetchSections, fetchServices, fetchLawyers } from './api';
-import Admin from './Admin';
+
+const Admin = React.lazy(() => import('./Admin'));
 
 // --- Shared Components ---
 
@@ -72,7 +73,7 @@ const Navbar = ({ settings, menus }: { settings: any, menus: any[] }) => {
   };
 
   return (
-    <nav className={`fixed top-0 w-full z-50 transition-all duration-500 ${isScrolled ? 'bg-black/95 py-4 shadow-2xl backdrop-blur-md' : 'bg-transparent py-4'}`}>
+    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${isScrolled ? 'bg-black/95 py-4 shadow-2xl backdrop-blur-md' : 'bg-transparent py-4'}`}>
       <div className="max-w-7xl mx-auto px-6 flex justify-between items-center h-12">
         <div className="flex items-center">
           {/* Logo removed per user request */}
@@ -116,18 +117,33 @@ const Navbar = ({ settings, menus }: { settings: any, menus: any[] }) => {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
-            className="lg:hidden fixed inset-0 top-[88px] bg-black/98 z-40 p-8 overflow-y-auto"
+            className="lg:hidden fixed inset-0 top-0 bg-black/98 z-[60] flex flex-col p-8 overflow-y-auto"
           >
-            <div className="flex flex-col gap-8 text-center">
+            <div className="flex justify-end p-4">
+              <button className="text-gold-500" onClick={() => setIsMobileMenuOpen(false)}>
+                <X size={32} />
+              </button>
+            </div>
+            <div className="flex-1 flex flex-col gap-8 text-center justify-center">
               {menus.map(menu => (
                 <div key={menu.id} className="flex flex-col gap-2">
-                  <Link
-                    to={menu.path}
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className={`${menu.parent_id ? 'text-[10px] text-gold-500/60' : 'text-xs font-bold text-gold-200'} tracking-[0.3em] uppercase`}
-                  >
-                    {menu.title}
-                  </Link>
+                  {menu.path.startsWith('/#') ? (
+                    <a
+                      href={menu.path}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="text-lg font-bold text-gold-200 tracking-[0.4em] uppercase"
+                    >
+                      {menu.title}
+                    </a>
+                  ) : (
+                    <Link
+                      to={menu.path}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="text-lg font-bold text-gold-200 tracking-[0.4em] uppercase"
+                    >
+                      {menu.title}
+                    </Link>
+                  )}
                 </div>
               ))}
             </div>
@@ -139,59 +155,58 @@ const Navbar = ({ settings, menus }: { settings: any, menus: any[] }) => {
 };
 
 const Hero = ({ settings, menus }: { settings: any, menus: any[] }) => (
-  <section className="relative min-h-[100vh] flex flex-col items-center pt-[5vh] text-center px-6">
+  <section className="relative min-h-[100vh] flex flex-col items-center pt-[2vh] md:pt-[5vh] pb-24 text-center px-6">
     <motion.div
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 1.2, ease: "easeOut" }}
-      className="z-10 flex flex-col items-center mb-[2vw] relative pl-[8vw]"
+      className="z-10 flex flex-col items-center mb-[2vw] relative w-full"
     >
       {/* Logo + Links side by side */}
-      <div className="flex items-center gap-8 md:gap-12">
-        {/* Logo + Button centered */}
-        <div className="flex flex-col items-center">
-          <img
-            src={settings.site_logo}
-            alt="ZEMA Logo"
-            className="w-[65vw] md:w-[38vw] max-w-[560px] h-auto mb-4"
-          />
-          <p className="text-gold-200/80 font-display font-bold tracking-[0.5em] text-xs uppercase mb-8 mt-[-3rem]">ADALET VE GÜVENİN ADRESİ</p>
-          {/* Button centered under the subtitle */}
-          <a href="#iletisim" className="btn-gold-action group">
-            RANDEVU AL <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </a>
-        </div>
+      {/* Logo + Button centered */}
+      <div className="flex flex-col items-center relative z-20 w-full -mt-6 md:mt-0">
+        <img
+          src={settings.site_logo}
+          alt="ZEMA Logo"
+          className="w-[85vw] md:w-[38vw] max-w-[560px] h-auto mb-4"
+          loading="eager"
+        />
+        <p className="text-gold-200/80 font-display font-bold tracking-[0.5em] text-[clamp(8px,1vw,12px)] uppercase mb-8 mt-[-10vw] md:mt-[-3rem]">ADALET VE GÜVENİN ADRESİ</p>
+        {/* Button centered under the subtitle */}
+        <a href="#iletisim" className="btn-gold-action group">
+          RANDEVU AL <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+        </a>
+      </div>
 
-        {/* Navigation Links - Bold + Hover effects */}
-        <div className="hidden lg:flex flex-col gap-5 mt-[60px] self-start ml-[-2rem] bg-white/5 backdrop-blur-sm border border-gold-500/15 px-6 py-5 rounded-2xl shadow-xl">
-          {menus.filter(m => !m.parent_id).map((menu) => (
-            <a
-              key={menu.id}
-              href={menu.path}
-              className="relative text-[11px] font-extrabold tracking-[0.3em] text-gold-200/70 hover:text-gold-300 transition-all duration-300 uppercase whitespace-nowrap group hover:-translate-y-0.5"
-              style={{ display: 'inline-block', transition: 'color 0.3s, transform 0.3s' }}
-            >
-              {menu.title}
-              <span
-                className="absolute left-0 -bottom-1 h-px bg-gradient-to-r from-gold-500 to-gold-300 w-full origin-left"
-                style={{ transform: 'scaleX(0)', transition: 'transform 0.35s ease' }}
-                ref={(el) => {
-                  if (!el) return;
-                  const parent = el.parentElement;
-                  if (!parent) return;
-                  parent.addEventListener('mouseenter', () => { el.style.transform = 'scaleX(1)'; });
-                  parent.addEventListener('mouseleave', () => { el.style.transform = 'scaleX(0)'; });
-                }}
-              />
-            </a>
-          ))}
-        </div>
+      {/* Navigation Links - Positioned to the right but not pushing the center */}
+      <div className="hidden lg:flex flex-col gap-5 bg-white/5 backdrop-blur-2xl border border-gold-500/15 px-6 py-5 rounded-2xl shadow-xl absolute left-[calc(50%+18vw)] xl:left-[calc(50%+15rem)] top-1/2 -translate-y-1/2 z-30">
+        {menus.filter(m => !m.parent_id).map((menu) => (
+          <a
+            key={menu.id}
+            href={menu.path}
+            className="relative text-[11px] font-extrabold tracking-[0.3em] text-gold-200/70 hover:text-gold-300 transition-all duration-300 uppercase whitespace-nowrap group hover:-translate-y-0.5"
+            style={{ display: 'inline-block', transition: 'color 0.3s, transform 0.3s' }}
+          >
+            {menu.title}
+            <span
+              className="absolute left-0 -bottom-1 h-px bg-gradient-to-r from-gold-500 to-gold-300 w-full origin-left"
+              style={{ transform: 'scaleX(0)', transition: 'transform 0.35s ease' }}
+              ref={(el) => {
+                if (!el) return;
+                const parent = el.parentElement;
+                if (!parent) return;
+                parent.addEventListener('mouseenter', () => { el.style.transform = 'scaleX(1)'; });
+                parent.addEventListener('mouseleave', () => { el.style.transform = 'scaleX(0)'; });
+              }}
+            />
+          </a>
+        ))}
       </div>
     </motion.div>
 
     {/* Hero Bottom Stats */}
-    <div className="w-full max-w-7xl mx-auto px-6 mt-40 pb-0 mb-[-8vh] relative z-20">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div className="w-full max-w-7xl mx-auto px-6 mt-20 relative z-20">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-10">
         {[
           { title: 'UZMAN KADRO', desc: 'Alanında deneyimli ve uzman avukatlarımızla yanınızdayız.' },
           { title: 'HIZLI ÇÖZÜM', desc: 'Hukuki süreçlerinizi en etkin ve hızlı şekilde sonuçlandırıyoruz.' },
@@ -202,10 +217,10 @@ const Hero = ({ settings, menus }: { settings: any, menus: any[] }) => (
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 1.5 + (i * 0.2) }}
-            className="p-10 text-center rounded-3xl backdrop-blur-sm bg-white/[0.03] border border-gold-500/[0.05] hover:border-gold-500/30 hover:bg-gold-500/5 hover:-translate-y-2 transition-all duration-500 group shadow-2xl"
+            className="p-8 lg:p-12 text-center rounded-[2rem] backdrop-blur-sm bg-white/[0.03] border border-gold-500/[0.05] hover:border-gold-500/30 hover:bg-gold-500/5 hover:-translate-y-2 transition-all duration-500 group shadow-2xl"
           >
-            <h3 className="text-lg font-display font-bold text-gold-200 mb-4 tracking-[0.2em] group-hover:text-gold-400 transition-colors uppercase">{card.title}</h3>
-            <p className="text-sm text-gold-100/40 leading-relaxed font-light">{card.desc}</p>
+            <h3 className="text-base lg:text-lg font-display font-bold text-gold-200 mb-4 tracking-[0.2em] group-hover:text-gold-400 transition-colors uppercase">{card.title}</h3>
+            <p className="text-xs lg:text-sm text-gold-100/40 leading-relaxed font-light">{card.desc}</p>
           </motion.div>
         ))}
       </div>
@@ -216,7 +231,7 @@ const Hero = ({ settings, menus }: { settings: any, menus: any[] }) => (
 const About = ({ section }: { section: any }) => {
   if (!section) return null;
   return (
-    <section id="hakkimizda" className="py-[8vw] mt-32 px-6 relative">
+    <section id="hakkimizda" className="py-[8vw] -mt-6 md:-mt-12 px-6 relative">
       <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-[5vw] items-center">
         <motion.div
           initial={{ opacity: 0, x: -30 }}
@@ -234,7 +249,11 @@ const About = ({ section }: { section: any }) => {
         {section.image_url && (
           <div className="relative">
             <div className="glass-card p-[1vw] relative z-10">
-              <img src={section.image_url} className="w-full grayscale hover:grayscale-0 transition-all duration-1000 opacity-70 hover:opacity-100" />
+              <img
+                src={section.image_url}
+                className="w-full grayscale hover:grayscale-0 transition-all duration-1000 opacity-70 hover:opacity-100"
+                loading="lazy"
+              />
             </div>
           </div>
         )}
@@ -252,17 +271,24 @@ const ServiceIcon = ({ name }: { name: string }) => {
 const Services = ({ services, settings }: { services: any[], settings: any }) => (
   <section
     id="hizmetlerimiz"
-    className="py-[8vw] px-6 relative"
-    style={settings?.services_bg_image ? {
-      backgroundImage: `url(${settings.services_bg_image})`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat',
-    } : {}}
+    className="py-[8vw] px-6 relative overflow-hidden"
   >
+    {/* Background layer starting lower */}
     {settings?.services_bg_image && (
-      <div className="absolute inset-0 bg-black/60" />
+      <div
+        className="absolute bottom-0 left-0 right-0 top-[70vh] z-0"
+        style={{
+          backgroundImage: `url(${settings.services_bg_image})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'top center',
+          backgroundRepeat: 'no-repeat',
+        }}
+      />
     )}
+    {settings?.services_bg_image && (
+      <div className="absolute bottom-0 left-0 right-0 top-[70vh] bg-black/65 z-0" />
+    )}
+
     <div className="max-w-7xl mx-auto relative z-10">
       <div className="text-center mb-[5vw]">
         <span className="text-gold-500 text-[clamp(8px,0.8vw,12px)] tracking-[0.4em] uppercase font-bold mb-[1vw] block">UZMANLIK ALANLARIMIZ</span>
@@ -297,7 +323,7 @@ const Team = ({ lawyers, settings }: { lawyers: any[], settings: any }) => {
   return (
     <section
       id="avukatlarimiz"
-      className="py-[8vw] px-6 relative"
+      className="py-[8vw] px-6 relative overflow-hidden"
       style={settings?.team_bg_image ? {
         backgroundImage: `url(${settings.team_bg_image})`,
         backgroundSize: 'cover',
@@ -323,14 +349,14 @@ const Team = ({ lawyers, settings }: { lawyers: any[], settings: any }) => {
               className="group cursor-pointer"
               onClick={() => setSelected(lawyer)}
             >
-              <div className="glass-card p-2 mb-8 relative overflow-hidden aspect-[3/4]">
-                <div className="absolute inset-0 bg-gold-900/10 group-hover:bg-transparent transition-colors duration-700 z-10"></div>
+              <div className="mb-8 relative overflow-hidden aspect-[4/5] rounded-[2.5rem] flex items-center justify-center bg-gold-500/5 transition-all duration-500 group-hover:bg-gold-500/10">
                 <img
                   src={lawyer.image_url}
                   alt={lawyer.name}
-                  className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-1000 group-hover:scale-110"
+                  className="w-[94%] h-[94%] object-cover grayscale group-hover:grayscale-0 transition-all duration-1000 group-hover:scale-105 rounded-[2.2rem]"
+                  loading="lazy"
                 />
-                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent py-4 px-4 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <div className="absolute bottom-6 inset-x-8 bg-gradient-to-t from-black/80 to-transparent py-4 px-4 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-b-[2rem]">
                   <p className="text-gold-400 text-[10px] font-bold tracking-widest uppercase text-center">Profili Gör →</p>
                 </div>
               </div>
@@ -396,7 +422,7 @@ const Team = ({ lawyers, settings }: { lawyers: any[], settings: any }) => {
 const Contact = ({ settings }: { settings: any }) => (
   <section
     id="iletisim"
-    className="py-[8vw] px-6 relative"
+    className="py-[8vw] px-6 relative overflow-hidden"
     style={settings?.contact_bg_image ? {
       backgroundImage: `url(${settings.contact_bg_image})`,
       backgroundSize: 'cover',
@@ -442,20 +468,20 @@ const Contact = ({ settings }: { settings: any }) => (
             </div>
           </div>
         </div>
-        <form className="glass-card p-8 space-y-6">
+        <form className="bg-white/5 backdrop-blur-2xl border border-gold-500/15 p-8 space-y-6 rounded-3xl shadow-xl">
           <div className="grid md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <label className="text-[10px] text-gold-500 font-bold tracking-widest uppercase">AD SOYAD</label>
-              <input type="text" className="w-full bg-black/40 border border-gold-500/20 p-3 text-gold-100 focus:border-gold-500 outline-none transition-colors" />
+              <input type="text" className="w-full bg-black/40 border border-gold-500/20 p-3 text-gold-100 focus:border-gold-500 outline-none transition-colors rounded-xl" />
             </div>
             <div className="space-y-2">
               <label className="text-[10px] text-gold-500 font-bold tracking-widest uppercase">E-POSTA</label>
-              <input type="email" className="w-full bg-black/40 border border-gold-500/20 p-3 text-gold-100 focus:border-gold-500 outline-none transition-colors" />
+              <input type="email" className="w-full bg-black/40 border border-gold-500/20 p-3 text-gold-100 focus:border-gold-500 outline-none transition-colors rounded-xl" />
             </div>
           </div>
           <div className="space-y-2">
             <label className="text-[10px] text-gold-500 font-bold tracking-widest uppercase">MESAJINIZ</label>
-            <textarea rows={4} className="w-full bg-black/40 border border-gold-500/20 p-3 text-gold-100 focus:border-gold-500 outline-none transition-colors resize-none"></textarea>
+            <textarea rows={4} className="w-full bg-black/40 border border-gold-500/20 p-3 text-gold-100 focus:border-gold-500 outline-none transition-colors resize-none rounded-xl"></textarea>
           </div>
           <button className="btn-gold-action w-full justify-center">MESAJI GÖNDER</button>
         </form>
@@ -465,29 +491,29 @@ const Contact = ({ settings }: { settings: any }) => (
 );
 
 const Footer = ({ settings }: { settings: any }) => (
-  <footer className="bg-black/60 backdrop-blur-md py-6 px-6 border-t border-gold-500/10">
-    <div className="max-w-7xl mx-auto flex flex-col items-center text-center">
-      <img src={settings.site_logo} alt="Logo" className="h-10 mb-4" />
-      <p className="max-w-xl text-gold-100/30 text-xs leading-relaxed mb-5">
+  <footer className="bg-black/60 backdrop-blur-md py-4 px-6 border-t border-gold-500/10">
+    <div className="max-w-4xl mx-auto flex flex-col items-center text-center">
+      <img src={settings.site_logo} alt="Logo" className="h-[20vw] md:h-30 max-h-30 mb-[-1.5rem]" loading="lazy" />
+      <p className="max-w-lg text-gold-100/30 text-[10px] leading-relaxed mb-4">
         Adaletin tecellisi ve müvekkillerimizin haklarının korunması için profesyonel ve etik değerlere bağlı hukuki hizmet sunuyoruz.
       </p>
-      <div className="flex gap-4 mb-5">
+      <div className="flex gap-4 mb-4">
         {[
           { Icon: Instagram, link: settings.social_instagram },
           { Icon: Facebook, link: settings.social_facebook },
           { Icon: Twitter, link: settings.social_twitter }
         ].map(({ Icon, link }, i) => (
-          <a key={i} href={link} className="w-9 h-9 glass-card flex items-center justify-center text-gold-500 hover:text-white transition-all">
-            <Icon size={16} />
+          <a key={i} href={link} className="w-8 h-8 glass-card rounded-lg flex items-center justify-center text-gold-500 hover:text-white transition-all">
+            <Icon size={14} />
           </a>
         ))}
       </div>
-      <div className="pt-8 w-full flex flex-col md:flex-row justify-between items-center gap-4">
-        <p className="text-[10px] text-gold-100/20 tracking-widest uppercase">© 2024 {settings.site_name}. TÜM HAKLARI SAKLIDIR.</p>
-        <div className="flex flex-wrap justify-center gap-8 text-[10px] text-gold-100/20 tracking-widest uppercase">
-          <a href="#" className="hover:text-gold-500 transition-colors">GİZLİLİK POLİTİKASI</a>
-          <a href="#" className="hover:text-gold-500 transition-colors">KULLANIM ŞARTLARI</a>
-          <Link to="/admin" className="hover:text-gold-500 transition-colors">YÖNETİM PANELİ</Link>
+      <div className="pt-4 w-full flex flex-col md:flex-row justify-between items-center gap-4 border-t border-gold-500/5">
+        <p className="text-[9px] text-gold-100/20 tracking-widest uppercase">© 2024 {settings.site_name}.</p>
+        <div className="flex flex-wrap justify-center gap-6 text-[9px] text-gold-100/20 tracking-widest uppercase">
+          <a href="#" className="hover:text-gold-500 transition-colors">GİZLİLİK</a>
+          <a href="#" className="hover:text-gold-500 transition-colors">ŞARTLAR</a>
+          <Link to="/admin" className="hover:text-gold-500 transition-colors text-gold-500/40">YÖNETİM</Link>
         </div>
       </div>
     </div>
@@ -514,7 +540,7 @@ const DynamicPage = () => {
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',
-        backgroundAttachment: 'fixed',
+        backgroundAttachment: 'scroll',
       } : {}}
     >
       {page.bg_image && <div className="absolute inset-0 bg-black/70" />}
@@ -559,38 +585,61 @@ export default function App() {
   const [services, setServices] = useState<any[]>([]);
   const [lawyers, setLawyers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [bgLoaded, setBgLoaded] = useState(false);
+
+  const activeSettings = settings || defaultSettings;
 
   useEffect(() => {
-    console.log('App: Starting to load content...');
     const loadContent = async () => {
       try {
-        const [s, p, m, sec, ser, law] = await Promise.all([
+        // First load essential data for the shell
+        const [s, m] = await Promise.all([
           fetchSettings(),
-          fetchPages(),
           fetchMenus(),
+        ]);
+
+        setSettings(s || defaultSettings);
+        setMenus(m || []);
+        setIsLoading(false); // Show the shell as soon as we have settings and menus
+
+        // Then load the rest of the content in the background
+        const [p, sec, ser, law] = await Promise.all([
+          fetchPages(),
           fetchSections(),
           fetchServices(),
           fetchLawyers()
         ]);
-        console.log('App: Content loaded successfully', { s, p, m, sec, ser, law });
-        setSettings(s || defaultSettings);
+
         setPages(p || []);
-        setMenus(m || []);
         setSections(sec || []);
         setServices(ser || []);
         setLawyers(law || []);
       } catch (error) {
         console.error('App: Error loading data:', error);
         setSettings(defaultSettings);
-      } finally {
         setIsLoading(false);
       }
     };
     loadContent();
   }, []);
 
+  useEffect(() => {
+    if (activeSettings.site_bg_image) {
+      const img = new Image();
+      img.src = activeSettings.site_bg_image;
+      img.onload = () => {
+        setBgLoaded(true);
+      };
+      img.onerror = () => {
+        console.error('App: Background image failed to load');
+        setBgLoaded(true); // Still show content if image fails
+      };
+    } else {
+      setBgLoaded(true);
+    }
+  }, [activeSettings.site_bg_image]);
+
   if (isLoading) {
-    console.log('App: Rendering loading state');
     return (
       <div className="min-h-screen flex items-center justify-center bg-dark-950">
         <div className="text-gold-500 font-display animate-pulse tracking-widest text-2xl uppercase">YÜKLENİYOR...</div>
@@ -598,21 +647,18 @@ export default function App() {
     );
   }
 
-  console.log('App: Rendering content with settings', settings);
-
-  const activeSettings = settings || defaultSettings;
-
   return (
     <Router>
       <div
-        className="min-h-screen relative"
+        className="min-h-screen relative transition-opacity duration-1000 overflow-x-hidden max-w-[100vw]"
         style={{
-          backgroundImage: activeSettings.site_bg_image ? `url(${activeSettings.site_bg_image})` : 'none',
-          backgroundSize: 'contain',
+          backgroundImage: activeSettings.site_bg_image && bgLoaded ? `url(${activeSettings.site_bg_image})` : 'none',
+          backgroundSize: '100% auto',
           backgroundRepeat: 'no-repeat',
           backgroundPosition: 'top center',
           backgroundAttachment: 'scroll',
           backgroundColor: '#0a0908',
+          opacity: bgLoaded ? 1 : 0.9,
         }}
       >
         {/* Dark Overlay for Readability */}
@@ -623,7 +669,11 @@ export default function App() {
           <Navbar settings={activeSettings} menus={menus} />
           <Routes>
             <Route path="/" element={<HomePage settings={activeSettings} sections={sections} services={services} lawyers={lawyers} menus={menus} />} />
-            <Route path="/admin" element={<Admin />} />
+            <Route path="/admin" element={
+              <React.Suspense fallback={<div className="min-h-screen bg-dark-950" />}>
+                <Admin />
+              </React.Suspense>
+            } />
             <Route path="/p/:slug" element={<DynamicPage />} />
           </Routes>
           <Footer settings={activeSettings} />
