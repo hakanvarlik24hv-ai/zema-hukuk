@@ -92,3 +92,6 @@ export const importBackup = async (data: any) => secureFetch(`${API_BASE}/api/ba
     method: 'POST',
     body: JSON.stringify(data)
 });
+
+export const cloudSave = async () => secureFetch(`${API_BASE}/api/backup/direct-save`, { method: 'POST' });
+export const cloudRestore = async () => secureFetch(`${API_BASE}/api/backup/direct-restore`, { method: 'POST' });

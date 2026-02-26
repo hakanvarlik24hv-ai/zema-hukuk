@@ -6,7 +6,7 @@ import {
     fetchMenus, saveMenu, deleteMenu,
     fetchServices, saveService, deleteService,
     fetchLawyers, saveLawyer, deleteLawyer,
-    verifyPassword, exportBackup, importBackup
+    verifyPassword, exportBackup, importBackup, cloudSave, cloudRestore
 } from './api';
 import {
     Save, Plus, Trash2, Edit2, X, Check, Settings,
@@ -231,6 +231,36 @@ const Admin = () => {
         reader.readAsText(file);
     };
 
+    const handleCloudSave = async () => {
+        try {
+            const result = await cloudSave();
+            if (result.success) {
+                showNotification('Veriler başarıyla buluta (sunucuya) yedeklendi.');
+            } else {
+                showNotification(result.error || 'Yedekleme başarısız.', 'error');
+            }
+        } catch (error) {
+            showNotification('Bulut yedeği alınırken hata oluştu.', 'error');
+        }
+    };
+
+    const handleCloudRestore = async () => {
+        if (!window.confirm('DİKKAT: Mevcut verileriniz silinecek ve en son alınan bulut yedeği yüklenecektir. Onaylıyor musunuz?')) {
+            return;
+        }
+        try {
+            const result = await cloudRestore();
+            if (result.success) {
+                showNotification('Bulut yedeği başarıyla yüklendi. Sayfa yenileniyor...');
+                setTimeout(() => window.location.reload(), 2000);
+            } else {
+                showNotification(result.error || 'Geri yükleme başarısız.', 'error');
+            }
+        } catch (error) {
+            showNotification('Bulut yedeği yüklenirken hata oluştu.', 'error');
+        }
+    };
+
     const renderMenus = (parentId: number | null = null, depth = 0) => {
         const items = menus.filter(m => (m.parent_id === parentId || (!parentId && !m.parent_id)));
 
@@ -436,34 +466,54 @@ const Admin = () => {
                         </form>
 
                         {/* Cloud Backup Section */}
-                        <div className="glass-card p-8 space-y-6 border-l-4 border-gold-500/30">
-                            <div className="flex items-center gap-3 mb-4">
-                                <CloudUpload size={20} className="text-gold-500" />
-                                <h2 className="text-xl font-display font-bold text-gold-200 uppercase">BULUT YEDEKLEME VE GERİ YÜKLEME</h2>
+                        <div className="glass-card p-8 space-y-8 border-l-4 border-gold-500/30">
+                            <div className="flex items-center gap-3">
+                                <CloudUpload size={22} className="text-gold-500" />
+                                <h2 className="text-xl font-display font-bold text-gold-200 uppercase tracking-widest">BULUT YEDEKLEME SİSTEMİ</h2>
                             </div>
-                            <div className="grid md:grid-cols-2 gap-8">
+
+                            <div className="grid lg:grid-cols-2 gap-8 ring-1 ring-gold-500/10 p-6 bg-white/5 rounded-sm">
                                 <div className="space-y-4">
-                                    <h3 className="text-sm font-bold text-gold-400 tracking-widest uppercase">VERİLERİ BULUTA YÜKLE (İNDİR)</h3>
-                                    <p className="text-xs text-gold-100/40 leading-relaxed uppercase tracking-wider">Tüm site ayarlarını, yazılarını ve avukat bilgilerini tek bir dosya olarak bilgisayarınıza yedekler.</p>
-                                    <button
-                                        onClick={handleBackupExport}
-                                        className="flex items-center gap-3 px-6 py-4 bg-gold-600/10 hover:bg-gold-600/20 text-gold-400 border border-gold-500/30 transition-all font-bold text-xs tracking-[0.2em] uppercase"
-                                    >
-                                        <Download size={18} /> YEDEĞİ İNDİR (DIŞA AKTAR)
-                                    </button>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <RefreshCw size={16} className="text-gold-500 animate-spin-slow" />
+                                        <h3 className="text-sm font-bold text-gold-400 tracking-widest uppercase">DOĞRUDAN BULUT SENKRONİZASYONU</h3>
+                                    </div>
+                                    <p className="text-xs text-gold-100/40 leading-relaxed uppercase tracking-wider">Dosya seçmenize gerek kalmadan verileri anında sunucu üzerindeki güvenli alana yedekler veya oradan geri yükler.</p>
+                                    <div className="flex flex-col sm:flex-row gap-3">
+                                        <button
+                                            onClick={handleCloudSave}
+                                            className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-gold-600 text-white hover:bg-gold-500 transition-all font-bold text-xs tracking-[0.2em] uppercase shadow-lg shadow-gold-900/20"
+                                        >
+                                            <CloudUpload size={18} /> BULUTA YÜKLE
+                                        </button>
+                                        <button
+                                            onClick={handleCloudRestore}
+                                            className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-white/10 hover:bg-white/20 text-gold-200 border border-gold-500/20 transition-all font-bold text-xs tracking-[0.2em] uppercase"
+                                        >
+                                            <RefreshCw size={18} /> BULUTTAN GERİ YÜKLE
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="space-y-4">
-                                    <h3 className="text-sm font-bold text-gold-400 tracking-widest uppercase">VERİLERİ BULUTTAN YÜKLE (GERİ YÜKLE)</h3>
-                                    <p className="text-xs text-gold-100/40 leading-relaxed uppercase tracking-wider">Daha önce aldığınız bir yedek dosyasını seçerek tüm siteyi eski haline döndürebilirsiniz.</p>
-                                    <label className="flex items-center gap-3 px-6 py-4 bg-white/5 hover:bg-white/10 text-gold-200 border border-gold-500/20 cursor-pointer transition-all font-bold text-xs tracking-[0.2em] uppercase">
-                                        <CloudUpload size={18} /> YEDEK DOSYASI SEÇ
-                                        <input
-                                            type="file"
-                                            accept=".json"
-                                            className="hidden"
-                                            onChange={handleBackupImport}
-                                        />
-                                    </label>
+
+                                <div className="space-y-4 lg:border-l lg:border-gold-500/10 lg:pl-8">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Download size={16} className="text-gold-500/60" />
+                                        <h3 className="text-sm font-bold text-gold-500/60 tracking-widest uppercase">MANUEL YEDEK (DOSYA)</h3>
+                                    </div>
+                                    <p className="text-[10px] text-gold-100/30 leading-relaxed uppercase tracking-wider italic">Verileri bilgisayarınıza bir dosya olarak indirmek veya o dosyadan geri yüklemek için kullanın.</p>
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={handleBackupExport}
+                                            className="p-3 bg-white/5 hover:bg-white/10 text-gold-500/60 border border-gold-500/10 transition-all"
+                                            title="Dosya olarak indir"
+                                        >
+                                            <Download size={18} />
+                                        </button>
+                                        <label className="flex-1 flex items-center justify-center gap-3 p-3 bg-white/5 hover:bg-white/10 text-gold-500/60 border border-gold-500/10 cursor-pointer transition-all font-bold text-[10px] tracking-widest uppercase">
+                                            <CloudUpload size={16} /> YEDEK DOSYASI YÜKLE
+                                            <input type="file" accept=".json" className="hidden" onChange={handleBackupImport} />
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                         </div>

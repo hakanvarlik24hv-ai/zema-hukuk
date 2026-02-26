@@ -662,20 +662,26 @@ export default function App() {
 
   return (
     <Router>
-      <div
-        className="min-h-screen relative transition-opacity duration-1000 overflow-x-hidden w-full"
-        style={{
-          backgroundImage: activeSettings.site_bg_image && bgLoaded ? `url(${activeSettings.site_bg_image})` : 'none',
-          backgroundSize: 'cover',
-          backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'center top',
-          backgroundAttachment: 'scroll',
-          backgroundColor: '#0a0908',
-          opacity: bgLoaded ? 1 : 0.9,
-        }}
-      >
-        {/* Dark Overlay for Readability */}
-        <div className="absolute inset-0 bg-black/45 z-[1] pointer-events-none" />
+      <div className="min-h-screen relative w-full overflow-x-hidden bg-dark-950">
+        {/* Background layer: scrolls with content but doesn't stretch to the full document height if not needed */}
+        {activeSettings.site_bg_image && (
+          <div
+            className="absolute inset-x-0 top-0 z-0 h-[400vh] max-w-full pointer-events-none"
+            style={{
+              backgroundImage: bgLoaded ? `url(${activeSettings.site_bg_image})` : 'none',
+              backgroundSize: 'cover',
+              backgroundPosition: 'top center',
+              backgroundRepeat: 'no-repeat',
+              backgroundAttachment: 'scroll',
+              opacity: bgLoaded ? 1 : 0,
+              transition: 'opacity 1.5s ease-in-out',
+              maskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)',
+            }}
+          />
+        )}
+
+        {/* Dark Overlay for Readability - spans the whole page */}
+        <div className="absolute inset-0 bg-black/45 z-[1] pointer-events-none w-full h-full" />
 
         {/* Content Layer */}
         <div className="relative z-10 w-full overflow-x-hidden">

@@ -3,6 +3,8 @@ import Database from 'better-sqlite3';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 
 dotenv.config();
 
@@ -481,6 +483,83 @@ app.post('/api/backup/import', authMiddleware, (req, res) => {
     } catch (error) {
         console.error('Import error:', error);
         res.status(500).json({ error: 'Veriler geri yüklenirken hata oluştu.' });
+    }
+});
+
+// Direct Server-side Save (Cloud Save)
+app.post('/api/backup/direct-save', authMiddleware, (req, res) => {
+    try {
+        const data = {
+            settings: db.prepare('SELECT * FROM settings').all(),
+            pages: db.prepare('SELECT * FROM pages').all(),
+            sections: db.prepare('SELECT * FROM sections').all(),
+            menus: db.prepare('SELECT * FROM menus').all(),
+            services: db.prepare('SELECT * FROM services').all(),
+            lawyers: db.prepare('SELECT * FROM lawyers').all(),
+            export_date: new Date().toISOString(),
+            version: '1.0'
+        };
+        const backupPath = path.join(process.cwd(), 'cloud_backup.json');
+        fs.writeFileSync(backupPath, JSON.stringify(data, null, 2));
+        res.json({ success: true, message: 'Veriler doğrudan sunucuya (bulut) kaydedildi.' });
+    } catch (error) {
+        console.error('Cloud save error:', error);
+        res.status(500).json({ error: 'Veri buluta kaydedilirken hata oluştu.' });
+    }
+});
+
+// Direct Server-side Restore (Cloud Restore)
+app.post('/api/backup/direct-restore', authMiddleware, (req, res) => {
+    try {
+        const backupPath = path.join(process.cwd(), 'cloud_backup.json');
+        if (!fs.existsSync(backupPath)) {
+            return res.status(404).json({ error: 'Henüz bir bulut yedeği bulunamadı.' });
+        }
+
+        const data = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
+
+        const transaction = db.transaction(() => {
+            db.prepare('DELETE FROM settings').run();
+            db.prepare('DELETE FROM pages').run();
+            db.prepare('DELETE FROM sections').run();
+            db.prepare('DELETE FROM menus').run();
+            db.prepare('DELETE FROM services').run();
+            db.prepare('DELETE FROM lawyers').run();
+
+            const insertSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
+            data.settings.forEach((s: any) => insertSetting.run(s.key, s.value));
+
+            if (data.pages) {
+                const insertPage = db.prepare('INSERT INTO pages (id, title, slug, content, bg_image, is_active) VALUES (?, ?, ?, ?, ?, ?)');
+                data.pages.forEach((p: any) => insertPage.run(p.id, p.title, p.slug, p.content, p.bg_image, p.is_active));
+            }
+
+            if (data.sections) {
+                const insertSection = db.prepare('INSERT INTO sections (id, title, subtitle, content, image_url) VALUES (?, ?, ?, ?, ?)');
+                data.sections.forEach((s: any) => insertSection.run(s.id, s.title, s.subtitle, s.content, s.image_url));
+            }
+
+            if (data.menus) {
+                const insertMenu = db.prepare('INSERT INTO menus (id, title, path, parent_id, sort_order) VALUES (?, ?, ?, ?, ?)');
+                data.menus.forEach((m: any) => insertMenu.run(m.id, m.title, m.path, m.parent_id, m.sort_order));
+            }
+
+            if (data.services) {
+                const insertService = db.prepare('INSERT INTO services (id, title, description, icon, sort_order) VALUES (?, ?, ?, ?, ?)');
+                data.services.forEach((s: any) => insertService.run(s.id, s.title, s.description, s.icon, s.sort_order));
+            }
+
+            if (data.lawyers) {
+                const insertLawyer = db.prepare('INSERT INTO lawyers (id, name, title, bio, image_url, sort_order) VALUES (?, ?, ?, ?, ?, ?)');
+                data.lawyers.forEach((l: any) => insertLawyer.run(l.id, l.name, l.title, l.bio, l.image_url, l.sort_order));
+            }
+        });
+
+        transaction();
+        res.json({ success: true, message: 'Sunucu yedeği başarıyla geri yüklendi.' });
+    } catch (error) {
+        console.error('Cloud restore error:', error);
+        res.status(500).json({ error: 'Veri buluttan geri yüklenirken hata oluştu.' });
     }
 });
 
