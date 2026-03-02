@@ -658,7 +658,7 @@ const Contact = ({ settings }: { settings: any }) => {
                 const overlay = document.createElement('div');
                 overlay.className = 'absolute inset-0 bg-dark-950/90 backdrop-blur-md z-50 flex flex-col items-center justify-center text-center p-6 animate-in fade-in duration-500';
                 overlay.innerHTML = `
-                  <div class="w-16 h-16 rounded-full bg-gold-500/20 flex items-center justify-center mb-4 text-gold-400">
+                  <div class="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mb-4 text-green-400">
                     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle-2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
                   </div>
                   <h3 class="text-xl font-display font-bold text-gold-200 mb-2 tracking-wide">Mesajınız İletildi!</h3>
@@ -675,9 +675,25 @@ const Contact = ({ settings }: { settings: any }) => {
                   btn.disabled = false;
                 }, 4000);
               } catch (error) {
-                alert('Mesaj gönderilirken bir hata oluştu. Lütfen tekrar deneyin.');
-                btn.innerHTML = originalText;
-                btn.disabled = false;
+                // Show error overlay
+                const overlay = document.createElement('div');
+                overlay.className = 'absolute inset-0 bg-dark-950/90 backdrop-blur-md z-50 flex flex-col items-center justify-center text-center p-6 animate-in fade-in duration-500';
+                overlay.innerHTML = `
+                  <div class="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mb-4 text-red-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                  </div>
+                  <h3 class="text-xl font-display font-bold text-red-400 mb-2 tracking-wide">Gönderim Başarısız</h3>
+                  <p class="text-gold-100/60 text-sm">Sunucuya bağlanılamadı, lütfen daha sonra tekrar deneyiniz.</p>
+                `;
+                form.appendChild(overlay);
+
+                setTimeout(() => {
+                  overlay.classList.remove('animate-in', 'fade-in');
+                  overlay.classList.add('animate-out', 'fade-out');
+                  setTimeout(() => overlay.remove(), 500);
+                  btn.innerHTML = originalText;
+                  btn.disabled = false;
+                }, 4000);
               }
             }}
           >
