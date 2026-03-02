@@ -1,8 +1,7 @@
 import { db_cloud } from './firebase';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, getDocs, deleteDoc, updateDoc, addDoc, query, where, orderBy, writeBatch } from 'firebase/firestore';
 
 let authToken = localStorage.getItem('admin_token') || '';
-const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export const setAuthToken = (token: string) => {
     authToken = token;
@@ -13,141 +12,233 @@ export const setAuthToken = (token: string) => {
     }
 };
 
-const apiCache = new Map<string, { data: any, timestamp: number }>();
-const CACHE_DURATION = 1000 * 60 * 5; // 5 minutes
-
-const secureFetch = async (url: string, options: any = {}) => {
-    const isGet = !options.method || options.method === 'GET';
-    if (isGet && apiCache.has(url)) {
-        const cached = apiCache.get(url)!;
-        if (Date.now() - cached.timestamp < CACHE_DURATION) {
-            return cached.data;
-        }
-    }
-
-    const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        ...options.headers,
-    };
-
-    if (authToken) {
-        headers['Authorization'] = authToken;
-    }
-
-    try {
-        const response = await fetch(url, { ...options, headers });
-        if (response.status === 401 || response.status === 403) {
-            setAuthToken('');
-            throw new Error('Unauthorized');
-        }
-        const data = await response.json();
-        if (isGet) {
-            apiCache.set(url, { data, timestamp: Date.now() });
-        } else {
-            apiCache.clear();
-        }
-        return data;
-    } catch (error) {
-        console.error(`API Error (${url}):`, error);
-        throw error;
-    }
+export const fetchSettings = async () => {
+    const snapshot = await getDocs(collection(db_cloud, 'settings'));
+    const settings: any = {};
+    snapshot.forEach(doc => {
+        settings[doc.id] = doc.data().value;
+    });
+    return settings;
 };
 
-export const fetchSettings = async () => secureFetch(`${API_BASE}/api/settings`);
-
-export const updateSettings = async (settings: any) => secureFetch(`${API_BASE}/api/settings`, {
-    method: 'POST',
-    body: JSON.stringify(settings)
-});
+export const updateSettings = async (settings: any) => {
+    const batch = writeBatch(db_cloud);
+    Object.entries(settings).forEach(([key, value]) => {
+        batch.set(doc(db_cloud, 'settings', key), { value });
+    });
+    await batch.commit();
+    return { success: true };
+};
 
 export const verifyPassword = async (password: string) => {
-    const response = await fetch(`${API_BASE}/api/verify-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password })
-    });
-    const data = await response.json();
-    if (data.success) {
+    const docRef = doc(db_cloud, 'settings', 'admin_password');
+    const docSnap = await getDoc(docRef);
+    const expectedPassword = docSnap.exists() ? docSnap.data().value : 'admin123';
+
+    if (password === expectedPassword) {
         setAuthToken(password);
+        return { success: true };
     }
-    return data;
+    return { success: false, error: 'Hatalı şifre' };
 };
 
-export const fetchPages = async () => secureFetch(`${API_BASE}/api/pages`);
-export const fetchPageBySlug = async (slug: string) => secureFetch(`${API_BASE}/api/pages/${slug}`);
+export const fetchPages = async () => {
+    const snapshot = await getDocs(collection(db_cloud, 'pages'));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
+export const fetchPageBySlug = async (slug: string) => {
+    const q = query(collection(db_cloud, 'pages'), where("slug", "==", slug));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+        return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+    }
+    throw new Error('Not found');
+};
+
 export const savePage = async (page: any) => {
-    const method = page.id ? 'PUT' : 'POST';
-    const url = page.id ? `${API_BASE}/api/pages/${page.id}` : `${API_BASE}/api/pages`;
-    return secureFetch(url, { method, body: JSON.stringify(page) });
+    if (page.id) {
+        const { id, ...data } = page;
+        await updateDoc(doc(db_cloud, 'pages', String(id)), data);
+        return { success: true };
+    } else {
+        const docRef = await addDoc(collection(db_cloud, 'pages'), page);
+        return { id: docRef.id };
+    }
 };
-export const deletePage = async (id: number) => secureFetch(`${API_BASE}/api/pages/${id}`, { method: 'DELETE' });
 
-export const fetchSections = async () => secureFetch(`${API_BASE}/api/sections`);
-export const updateSection = async (id: string, section: any) => secureFetch(`${API_BASE}/api/sections/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(section)
-});
+export const deletePage = async (id: string | number) => {
+    await deleteDoc(doc(db_cloud, 'pages', String(id)));
+    return { success: true };
+};
 
-export const fetchMenus = async () => secureFetch(`${API_BASE}/api/menus`);
+export const fetchSections = async () => {
+    const snapshot = await getDocs(collection(db_cloud, 'sections'));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
+export const updateSection = async (id: string | number, section: any) => {
+    await updateDoc(doc(db_cloud, 'sections', String(id)), section);
+    return { success: true };
+};
+
+export const fetchMenus = async () => {
+    const q = query(collection(db_cloud, 'menus'), orderBy('sort_order'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
 export const saveMenu = async (menu: any) => {
-    const method = menu.id ? 'PUT' : 'POST';
-    const url = menu.id ? `${API_BASE}/api/menus/${menu.id}` : `${API_BASE}/api/menus`;
-    return secureFetch(url, { method, body: JSON.stringify(menu) });
+    if (menu.id) {
+        const { id, ...data } = menu;
+        await updateDoc(doc(db_cloud, 'menus', String(id)), data);
+        return { success: true };
+    } else {
+        const docRef = await addDoc(collection(db_cloud, 'menus'), menu);
+        return { id: docRef.id };
+    }
 };
-export const deleteMenu = async (id: number) => secureFetch(`${API_BASE}/api/menus/${id}`, { method: 'DELETE' });
 
-export const fetchServices = async () => secureFetch(`${API_BASE}/api/services`);
+export const deleteMenu = async (id: string | number) => {
+    await deleteDoc(doc(db_cloud, 'menus', String(id)));
+    return { success: true };
+};
+
+export const fetchServices = async () => {
+    const q = query(collection(db_cloud, 'services'), orderBy('sort_order'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
 export const saveService = async (service: any) => {
-    const method = service.id ? 'PUT' : 'POST';
-    const url = service.id ? `${API_BASE}/api/services/${service.id}` : `${API_BASE}/api/services`;
-    return secureFetch(url, { method, body: JSON.stringify(service) });
+    if (service.id) {
+        const { id, ...data } = service;
+        await updateDoc(doc(db_cloud, 'services', String(id)), data);
+        return { success: true };
+    } else {
+        const docRef = await addDoc(collection(db_cloud, 'services'), service);
+        return { id: docRef.id };
+    }
 };
-export const deleteService = async (id: number) => secureFetch(`${API_BASE}/api/services/${id}`, { method: 'DELETE' });
 
-export const fetchLawyers = async () => secureFetch(`${API_BASE}/api/lawyers`);
+export const deleteService = async (id: string | number) => {
+    await deleteDoc(doc(db_cloud, 'services', String(id)));
+    return { success: true };
+};
+
+export const fetchLawyers = async () => {
+    const q = query(collection(db_cloud, 'lawyers'), orderBy('sort_order'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
 export const saveLawyer = async (lawyer: any) => {
-    const method = lawyer.id ? 'PUT' : 'POST';
-    const url = lawyer.id ? `${API_BASE}/api/lawyers/${lawyer.id}` : `${API_BASE}/api/lawyers`;
-    return secureFetch(url, { method, body: JSON.stringify(lawyer) });
+    if (lawyer.id) {
+        const { id, ...data } = lawyer;
+        await updateDoc(doc(db_cloud, 'lawyers', String(id)), data);
+        return { success: true };
+    } else {
+        const docRef = await addDoc(collection(db_cloud, 'lawyers'), lawyer);
+        return { id: docRef.id };
+    }
 };
-export const deleteLawyer = async (id: number) => secureFetch(`${API_BASE}/api/lawyers/${id}`, { method: 'DELETE' });
 
-export const exportBackup = async () => secureFetch(`${API_BASE}/api/backup/export`);
-export const importBackup = async (data: any) => secureFetch(`${API_BASE}/api/backup/import`, {
-    method: 'POST',
-    body: JSON.stringify(data)
-});
+export const deleteLawyer = async (id: string | number) => {
+    await deleteDoc(doc(db_cloud, 'lawyers', String(id)));
+    return { success: true };
+};
 
-// --- Cloud Save/Restore: Directly via Firestore from Frontend ---
+// Messages API
+export const fetchMessages = async () => {
+    const q = query(collection(db_cloud, 'messages'), orderBy('created_at', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
+export const sendMessage = async (message: any) => {
+    const payload = {
+        ...message,
+        created_at: new Date().toISOString(),
+        is_read: 0
+    };
+    const docRef = await addDoc(collection(db_cloud, 'messages'), payload);
+    return { id: docRef.id, success: true };
+};
+
+export const markMessageRead = async (id: string | number) => {
+    await updateDoc(doc(db_cloud, 'messages', String(id)), { is_read: 1 });
+    return { success: true };
+};
+
+export const deleteMessage = async (id: string | number) => {
+    await deleteDoc(doc(db_cloud, 'messages', String(id)));
+    return { success: true };
+};
+
+// Backup APIs (For legacy/frontend manual trigger)
+export const exportBackup = async () => {
+    const [settings, pages, sections, menus, services, lawyers, messages] = await Promise.all([
+        fetchSettings(),
+        fetchPages(),
+        fetchSections(),
+        fetchMenus(),
+        fetchServices(),
+        fetchLawyers(),
+        fetchMessages()
+    ]);
+
+    const settingsArr = Object.keys(settings).map(key => ({ key, value: settings[key] }));
+
+    return {
+        settings: settingsArr,
+        pages,
+        sections,
+        menus,
+        services,
+        lawyers,
+        messages,
+        export_date: new Date().toISOString(),
+        version: '3.0'
+    };
+};
+
+export const importBackup = async (data: any) => {
+    try {
+        const batch = writeBatch(db_cloud);
+
+        if (data.settings) {
+            data.settings.forEach((s: any) => {
+                batch.set(doc(db_cloud, 'settings', s.key), { value: s.value });
+            });
+        }
+
+        const arrs = ['pages', 'sections', 'menus', 'services', 'lawyers', 'messages'];
+        arrs.forEach(coll => {
+            if (data[coll] && Array.isArray(data[coll])) {
+                data[coll].forEach((item: any) => {
+                    const { id, ...itemData } = item;
+                    // Provide an auto ID if missing during import
+                    const targetDoc = id ? doc(db_cloud, coll, String(id)) : doc(collection(db_cloud, coll));
+                    batch.set(targetDoc, itemData);
+                });
+            }
+        });
+
+        await batch.commit();
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+};
 
 export const cloudSave = async () => {
     try {
-        const [settings, pages, sections, menus, services, lawyers] = await Promise.all([
-            fetchSettings(),
-            fetchPages(),
-            fetchSections(),
-            fetchMenus(),
-            fetchServices(),
-            fetchLawyers(),
-        ]);
-
-        const backupData = {
-            settings,
-            pages,
-            sections,
-            menus,
-            services,
-            lawyers,
-            export_date: new Date().toISOString(),
-            version: '2.0',
-        };
-
+        const backupData = await exportBackup();
         const backupRef = doc(db_cloud, 'site_management', 'latest_backup');
         await setDoc(backupRef, {
             data: JSON.stringify(backupData),
             updated_at: new Date().toISOString(),
         });
-
         return { success: true, message: 'Veriler Firestore Bulut Veritabanına başarıyla yedeklendi.' };
     } catch (error: any) {
         console.error('Cloud save error:', error);
@@ -159,7 +250,6 @@ export const cloudRestore = async () => {
     try {
         const backupRef = doc(db_cloud, 'site_management', 'latest_backup');
         const docSnap = await getDoc(backupRef);
-
         if (!docSnap.exists()) {
             return { success: false, error: 'Henüz bir bulut yedeği bulunamadı.' };
         }
@@ -167,24 +257,10 @@ export const cloudRestore = async () => {
         const cloudData = docSnap.data();
         const data = JSON.parse(cloudData.data);
 
-        const result = await secureFetch(`${API_BASE}/api/backup/import`, {
-            method: 'POST',
-            body: JSON.stringify(data),
-        });
-
+        const result = await importBackup(data);
         return result;
+
     } catch (error: any) {
-        console.error('Cloud restore error:', error);
         return { success: false, error: `Buluttan geri yükleme hatası: ${error.message}` };
     }
 };
-
-// --- Messages API ---
-export const fetchMessages = async () => secureFetch(`${API_BASE}/api/messages`);
-export const sendMessage = async (message: any) => secureFetch(`${API_BASE}/api/messages`, {
-    method: 'POST',
-    body: JSON.stringify(message)
-});
-export const markMessageRead = async (id: number) => secureFetch(`${API_BASE}/api/messages/${id}/read`, { method: 'PUT' });
-export const deleteMessage = async (id: number) => secureFetch(`${API_BASE}/api/messages/${id}`, { method: 'DELETE' });
-
