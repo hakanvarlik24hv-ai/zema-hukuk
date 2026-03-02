@@ -5,25 +5,54 @@ import dotenv from 'dotenv';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { initializeApp } from 'firebase/app';
+import { initializeFirestore, doc, setDoc, getDoc, getFirestore } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getBytes } from 'firebase/storage';
 
 dotenv.config();
+
+const firebaseConfig = {
+    apiKey: process.env.VITE_FIREBASE_API_KEY,
+    authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.VITE_FIREBASE_APP_ID,
+    measurementId: process.env.VITE_FIREBASE_MEASUREMENT_ID
+};
+
+console.log('Firebase Proje ID:', firebaseConfig.projectId);
+
+const firebaseApp = initializeApp(firebaseConfig);
+const storage = getStorage(firebaseApp);
+// Node.js ortamında daha kararlı çalışması için long polling zorlanıyor
+const db_cloud = initializeFirestore(firebaseApp, {
+    experimentalForceLongPolling: true,
+});
 
 const app = express();
 const port = process.env.PORT || 3001;
 
-app.use(cors({
-    origin: [
-        'https://zema-hukuk.web.app',
-        'https://zema-hukuk.firebaseapp.com',
-        'http://localhost:3000',
-        'http://localhost:5173',
-    ],
-    credentials: true,
-}));
+app.use(cors()); // Temporarily allow all for testing
+app.options('*', cors());
 app.use(express.json());
+
+// Security Headers Middleware
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    next();
+});
 
 
 const db = new Database('database.db');
+
+// Server Alive Check
+app.get('/', (req, res) => {
+    res.send('ZEMA Hukuk API Sunucusu Çalışıyor (Port 3001)');
+});
 
 // Initialize database
 db.exec(`
@@ -37,6 +66,9 @@ db.exec(`
     title TEXT NOT NULL,
     slug TEXT UNIQUE NOT NULL,
     content TEXT,
+    meta_title TEXT,
+    meta_description TEXT,
+    meta_keywords TEXT,
     bg_image TEXT DEFAULT '',
     is_active INTEGER DEFAULT 1
   );
@@ -72,7 +104,19 @@ db.exec(`
     title TEXT,
     bio TEXT,
     image_url TEXT,
+    linkedin_url TEXT,
+    instagram_url TEXT,
+    facebook_url TEXT,
     sort_order INTEGER DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    message TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    is_read INTEGER DEFAULT 0
   );
 `);
 
@@ -135,41 +179,78 @@ if (menusCount === 0) {
     defaultMenus.forEach(m => insertMenu.run(m.title, m.path, m.sort_order));
 }
 
-// Seed default settings if empty
-const settingsCount = (db.prepare('SELECT COUNT(*) as count FROM settings').get() as any).count;
-if (settingsCount === 0) {
-    const defaultSettings = [
-        { key: 'site_name', value: 'ZEMA HUKUK BÜROSU' },
-        { key: 'site_logo', value: 'https://i.hizliresim.com/gj3qd7x.png' },
-        { key: 'contact_address', value: 'Bahçelievler Mah. Adalet Cad. No: 11 - 20/1 / İstanbul' },
-        { key: 'contact_phone', value: '+90 (212) 300 35 66' },
-        { key: 'contact_email', value: 'bilgi@zemahukuk.com' },
-        { key: 'social_instagram', value: '#' },
-        { key: 'social_facebook', value: '#' },
-        { key: 'social_twitter', value: '#' },
-        { key: 'site_bg_image', value: 'https://i.ibb.co/Y7XzXKd2/arkaplan11.png' },
-        { key: 'services_bg_image', value: '' },
-        { key: 'team_bg_image', value: '' },
-        { key: 'contact_bg_image', value: '' },
-        { key: 'admin_password', value: 'admin123' }
-    ];
+// Seed default settings or ensure keys exist
+const ensureKeys = [
+    { key: 'site_name', value: 'ZEMA HUKUK BÜROSU' },
+    { key: 'site_logo', value: 'https://i.hizliresim.com/gj3qd7x.png' },
+    { key: 'contact_address', value: 'Bahçelievler Mah. Adalet Cad. No: 11 - 20/1 / İstanbul' },
+    { key: 'contact_phone', value: '+90 (212) 300 35 66' },
+    { key: 'contact_email', value: 'bilgi@zemahukuk.com' },
+    { key: 'social_instagram', value: '#' },
+    { key: 'social_facebook', value: '#' },
+    { key: 'social_twitter', value: '#' },
+    { key: 'site_bg_image', value: 'https://i.ibb.co/Y7XzXKd2/arkaplan11.png' },
+    { key: 'services_bg_image', value: '' },
+    { key: 'team_bg_image', value: '' },
+    { key: 'contact_bg_image', value: '' },
+    { key: 'contact_map_html', value: '' },
+    { key: 'admin_password', value: 'admin123' },
+    // SEO Keys
+    { key: 'seo_title', value: 'Zema Hukuk & Arabuluculuk | İstanbul Hukuk Bürosu' },
+    { key: 'seo_description', value: 'Zema Hukuk, İstanbulda uzman avukat kadrosuyla aile hukuku, ceza hukuku, miras hukuku ve şirketler hukuku alanlarında profesyonel danışmanlık hizmeti sunmaktadır.' },
+    { key: 'seo_keywords', value: 'istanbul hukuk bürosu, uzman avukat, boşanma avukatı, ceza avukatı, hukuk danışmanlığı, zema hukuk, arabuluculuk' },
+    { key: 'seo_author', value: 'Zema Hukuk' },
+    { key: 'seo_favicon', value: 'https://i.hizliresim.com/gj3qd7x.png' },
+    { key: 'seo_og_image', value: 'https://i.ibb.co/Y7XzXKd2/arkaplan11.png' },
+    { key: 'google_analytics_id', value: 'G-QLTVSG3N79' },
+    { key: 'robots_txt', value: 'User-agent: *\nAllow: /' }
+];
 
-    const insertSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
-    defaultSettings.forEach(s => insertSetting.run(s.key, s.value));
-} else {
-    // Ensure new settings keys exist even if DB already had entries
-    const ensureKeys = [
-        { key: 'site_bg_image', value: 'https://i.ibb.co/Y7XzXKd2/arkaplan11.png' },
-        { key: 'services_bg_image', value: '' },
-        { key: 'team_bg_image', value: '' },
-        { key: 'contact_bg_image', value: '' },
-        { key: 'admin_password', value: 'admin123' }
-    ];
-    const insertIfMissing = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
-    ensureKeys.forEach(s => insertIfMissing.run(s.key, s.value));
+const insertIfMissing = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
+ensureKeys.forEach(s => insertIfMissing.run(s.key, s.value));
+
+// Migration: Ensure SEO columns exist in pages table if update failed or table already exists
+try {
+    db.exec("ALTER TABLE pages ADD COLUMN meta_title TEXT;");
+    db.exec("ALTER TABLE pages ADD COLUMN meta_description TEXT;");
+    db.exec("ALTER TABLE pages ADD COLUMN meta_keywords TEXT;");
+} catch (e) {
+    // Columns likely already exist
 }
 
 // Routes
+app.get('/robots.txt', (req, res) => {
+    try {
+        const robots = db.prepare("SELECT value FROM settings WHERE key = 'robots_txt'").get() as any;
+        res.type('text/plain');
+        res.send(robots?.value || 'User-agent: *\nAllow: /');
+    } catch (err) {
+        res.send('User-agent: *\nAllow: /');
+    }
+});
+
+app.get('/sitemap.xml', (req, res) => {
+    try {
+        const pages = db.prepare("SELECT slug FROM pages WHERE is_active = 1").all() as any[];
+        const baseUrl = 'https://zema-hukuk.web.app';
+        let sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
+
+        // Add home page
+        sitemap += `  <url>\n    <loc>${baseUrl}/</loc>\n    <changefreq>daily</changefreq>\n    <priority>1.0</priority>\n  </url>\n`;
+
+        // Add dynamic pages
+        pages.forEach(p => {
+            sitemap += `  <url>\n    <loc>${baseUrl}/p/${p.slug}</loc>\n    <changefreq>monthly</changefreq>\n    <priority>0.8</priority>\n  </url>\n`;
+        });
+
+        sitemap += `</urlset>`;
+        res.type('application/xml');
+        res.send(sitemap);
+    } catch (err) {
+        res.status(500).send('Error generating sitemap');
+    }
+});
+
 app.get('/api/settings', (req, res) => {
     const settings = db.prepare('SELECT * FROM settings').all();
     const settingsMap = settings.reduce((acc: any, curr: any) => {
@@ -194,7 +275,6 @@ const authMiddleware = (req: express.Request, res: express.Response, next: expre
         if (authHeader && expectedPassword && authHeader === expectedPassword) {
             next();
         } else {
-            console.warn(`Auth failed: header=${!!authHeader}, match=${authHeader === expectedPassword}`);
             res.status(403).json({ error: 'Yetkisiz erişim: Lütfen tekrar giriş yapın.' });
         }
     } catch (err) {
@@ -270,9 +350,9 @@ app.get('/api/pages/:slug', (req, res) => {
 });
 
 app.post('/api/pages', authMiddleware, (req, res) => {
-    const { title, slug, content, bg_image } = req.body;
+    const { title, slug, content, bg_image, meta_title, meta_description, meta_keywords } = req.body;
     try {
-        const info = db.prepare('INSERT INTO pages (title, slug, content, bg_image) VALUES (?, ?, ?, ?)').run(title, slug, content, bg_image || '');
+        const info = db.prepare('INSERT INTO pages (title, slug, content, bg_image, meta_title, meta_description, meta_keywords) VALUES (?, ?, ?, ?, ?, ?, ?)').run(title, slug, content, bg_image || '', meta_title || '', meta_description || '', meta_keywords || '');
         res.json({ id: info.lastInsertRowid });
     } catch (err: any) {
         res.status(400).json({ error: err.message });
@@ -280,9 +360,9 @@ app.post('/api/pages', authMiddleware, (req, res) => {
 });
 
 app.put('/api/pages/:id', authMiddleware, (req, res) => {
-    const { title, slug, content, bg_image, is_active } = req.body;
+    const { title, slug, content, bg_image, is_active, meta_title, meta_description, meta_keywords } = req.body;
     try {
-        db.prepare('UPDATE pages SET title = ?, slug = ?, content = ?, bg_image = ?, is_active = ? WHERE id = ?').run(title, slug, content, bg_image || '', is_active, req.params.id);
+        db.prepare('UPDATE pages SET title = ?, slug = ?, content = ?, bg_image = ?, is_active = ?, meta_title = ?, meta_description = ?, meta_keywords = ? WHERE id = ?').run(title, slug, content, bg_image || '', is_active, meta_title || '', meta_description || '', meta_keywords || '', req.params.id);
         res.json({ success: true });
     } catch (err: any) {
         res.status(400).json({ error: err.message });
@@ -379,9 +459,9 @@ app.get('/api/lawyers', (req, res) => {
 });
 
 app.post('/api/lawyers', authMiddleware, (req, res) => {
-    const { name, title, bio, image_url, sort_order } = req.body;
+    const { name, title, bio, image_url, linkedin_url, instagram_url, facebook_url, sort_order } = req.body;
     try {
-        const info = db.prepare('INSERT INTO lawyers (name, title, bio, image_url, sort_order) VALUES (?, ?, ?, ?, ?)').run(name, title, bio, image_url, sort_order || 0);
+        const info = db.prepare('INSERT INTO lawyers (name, title, bio, image_url, linkedin_url, instagram_url, facebook_url, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(name, title, bio, image_url, linkedin_url || '', instagram_url || '', facebook_url || '', sort_order || 0);
         res.json({ id: info.lastInsertRowid });
     } catch (err: any) {
         res.status(400).json({ error: err.message });
@@ -389,9 +469,9 @@ app.post('/api/lawyers', authMiddleware, (req, res) => {
 });
 
 app.put('/api/lawyers/:id', authMiddleware, (req, res) => {
-    const { name, title, bio, image_url, sort_order } = req.body;
+    const { name, title, bio, image_url, linkedin_url, instagram_url, facebook_url, sort_order } = req.body;
     try {
-        db.prepare('UPDATE lawyers SET name = ?, title = ?, bio = ?, image_url = ?, sort_order = ? WHERE id = ?').run(name, title, bio, image_url, sort_order, req.params.id);
+        db.prepare('UPDATE lawyers SET name = ?, title = ?, bio = ?, image_url = ?, linkedin_url = ?, instagram_url = ?, facebook_url = ?, sort_order = ? WHERE id = ?').run(name, title, bio, image_url, linkedin_url || '', instagram_url || '', facebook_url || '', sort_order, req.params.id);
         res.json({ success: true });
     } catch (err: any) {
         res.status(400).json({ error: err.message });
@@ -401,6 +481,40 @@ app.put('/api/lawyers/:id', authMiddleware, (req, res) => {
 app.delete('/api/lawyers/:id', authMiddleware, (req, res) => {
     db.prepare('DELETE FROM lawyers WHERE id = ?').run(req.params.id);
     res.json({ success: true });
+});
+
+// Messages
+app.get('/api/messages', authMiddleware, (req, res) => {
+    const messages = db.prepare('SELECT * FROM messages ORDER BY created_at DESC').all();
+    res.json(messages);
+});
+
+app.post('/api/messages', (req, res) => {
+    const { name, email, message } = req.body;
+    try {
+        const info = db.prepare('INSERT INTO messages (name, email, message) VALUES (?, ?, ?)').run(name, email, message);
+        res.json({ id: info.lastInsertRowid, success: true });
+    } catch (err: any) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+app.put('/api/messages/:id/read', authMiddleware, (req, res) => {
+    try {
+        db.prepare('UPDATE messages SET is_read = 1 WHERE id = ?').run(req.params.id);
+        res.json({ success: true });
+    } catch (err: any) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+app.delete('/api/messages/:id', authMiddleware, (req, res) => {
+    try {
+        db.prepare('DELETE FROM messages WHERE id = ?').run(req.params.id);
+        res.json({ success: true });
+    } catch (err: any) {
+        res.status(400).json({ error: err.message });
+    }
 });
 
 // --- Cloud Backup & Restore ---
@@ -415,6 +529,7 @@ app.get('/api/backup/export', authMiddleware, (req, res) => {
             menus: db.prepare('SELECT * FROM menus').all(),
             services: db.prepare('SELECT * FROM services').all(),
             lawyers: db.prepare('SELECT * FROM lawyers').all(),
+            messages: db.prepare('SELECT * FROM messages').all(),
             export_date: new Date().toISOString(),
             version: '1.0'
         };
@@ -441,6 +556,7 @@ app.post('/api/backup/import', authMiddleware, (req, res) => {
         db.prepare('DELETE FROM menus').run();
         db.prepare('DELETE FROM services').run();
         db.prepare('DELETE FROM lawyers').run();
+        db.prepare('DELETE FROM messages').run();
 
         // Re-insert settings (key, value)
         const insertSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
@@ -448,8 +564,8 @@ app.post('/api/backup/import', authMiddleware, (req, res) => {
 
         // Re-insert pages
         if (data.pages && Array.isArray(data.pages)) {
-            const insertPage = db.prepare('INSERT INTO pages (id, title, slug, content, bg_image, is_active) VALUES (?, ?, ?, ?, ?, ?)');
-            data.pages.forEach((p: any) => insertPage.run(p.id, p.title, p.slug, p.content, p.bg_image, p.is_active));
+            const insertPage = db.prepare('INSERT INTO pages (id, title, slug, content, bg_image, is_active, meta_title, meta_description, meta_keywords) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            data.pages.forEach((p: any) => insertPage.run(p.id, p.title, p.slug, p.content, p.bg_image || '', p.is_active || 1, p.meta_title || '', p.meta_description || '', p.meta_keywords || ''));
         }
 
         // Re-insert sections
@@ -472,8 +588,14 @@ app.post('/api/backup/import', authMiddleware, (req, res) => {
 
         // Re-insert lawyers
         if (data.lawyers && Array.isArray(data.lawyers)) {
-            const insertLawyer = db.prepare('INSERT INTO lawyers (id, name, title, bio, image_url, sort_order) VALUES (?, ?, ?, ?, ?, ?)');
-            data.lawyers.forEach((l: any) => insertLawyer.run(l.id, l.name, l.title, l.bio, l.image_url, l.sort_order));
+            const insertLawyer = db.prepare('INSERT INTO lawyers (id, name, title, bio, image_url, linkedin_url, instagram_url, facebook_url, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            data.lawyers.forEach((l: any) => insertLawyer.run(l.id, l.name, l.title, l.bio, l.image_url, l.linkedin_url || '', l.instagram_url || '', l.facebook_url || '', l.sort_order));
+        }
+
+        // Re-insert messages
+        if (data.messages && Array.isArray(data.messages)) {
+            const insertMessage = db.prepare('INSERT INTO messages (id, name, email, message, created_at, is_read) VALUES (?, ?, ?, ?, ?, ?)');
+            data.messages.forEach((m: any) => insertMessage.run(m.id, m.name, m.email, m.message, m.created_at, m.is_read || 0));
         }
     });
 
@@ -486,8 +608,8 @@ app.post('/api/backup/import', authMiddleware, (req, res) => {
     }
 });
 
-// Direct Server-side Save (Cloud Save)
-app.post('/api/backup/direct-save', authMiddleware, (req, res) => {
+// Direct Server-side Save (Cloud Save to Firebase)
+app.post('/api/backup/direct-save', authMiddleware, async (req, res) => {
     try {
         const data = {
             settings: db.prepare('SELECT * FROM settings').all(),
@@ -496,70 +618,102 @@ app.post('/api/backup/direct-save', authMiddleware, (req, res) => {
             menus: db.prepare('SELECT * FROM menus').all(),
             services: db.prepare('SELECT * FROM services').all(),
             lawyers: db.prepare('SELECT * FROM lawyers').all(),
+            messages: db.prepare('SELECT * FROM messages').all(),
             export_date: new Date().toISOString(),
-            version: '1.0'
+            version: '1.5'
         };
-        const backupPath = path.join(process.cwd(), 'cloud_backup.json');
-        fs.writeFileSync(backupPath, JSON.stringify(data, null, 2));
-        res.json({ success: true, message: 'Veriler doğrudan sunucuya (bulut) kaydedildi.' });
+
+        console.log('Bulut yedekleme (Firestore) başlatılıyor...');
+        const backupRef = doc(db_cloud, 'site_management', 'latest_backup');
+
+        await setDoc(backupRef, {
+            data: JSON.stringify(data),
+            updated_at: new Date().toISOString()
+        });
+
+        console.log('Bulut yedekleme Firestore üzerine başarıyla tamamlandı.');
+
+        res.json({ success: true, message: 'Veriler Firestore Bulut Veritabanına başarıyla yedeklendi.' });
     } catch (error) {
         console.error('Cloud save error:', error);
-        res.status(500).json({ error: 'Veri buluta kaydedilirken hata oluştu.' });
+        res.status(500).json({ error: `Veri buluta kaydedilirken hata oluştu: ${error instanceof Error ? error.message : String(error)}` });
     }
 });
 
-// Direct Server-side Restore (Cloud Restore)
-app.post('/api/backup/direct-restore', authMiddleware, (req, res) => {
+// Direct Server-side Restore (Cloud Restore from Firebase)
+app.post('/api/backup/direct-restore', authMiddleware, async (req, res) => {
     try {
-        const backupPath = path.join(process.cwd(), 'cloud_backup.json');
-        if (!fs.existsSync(backupPath)) {
+        console.log('Bulut geri yükleme (Firestore) başlatılıyor...');
+        const backupRef = doc(db_cloud, 'site_management', 'latest_backup');
+        const docSnap = await getDoc(backupRef);
+
+        if (!docSnap.exists()) {
             return res.status(404).json({ error: 'Henüz bir bulut yedeği bulunamadı.' });
         }
 
-        const data = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
+        const cloudData = docSnap.data();
+        const data = JSON.parse(cloudData.data);
+        console.log('Yedek verisi Firestore üzerinden alındı ve ayrıştırıldı.');
 
         const transaction = db.transaction(() => {
+            console.log('Eski veriler temizleniyor...');
             db.prepare('DELETE FROM settings').run();
             db.prepare('DELETE FROM pages').run();
             db.prepare('DELETE FROM sections').run();
             db.prepare('DELETE FROM menus').run();
             db.prepare('DELETE FROM services').run();
             db.prepare('DELETE FROM lawyers').run();
+            db.prepare('DELETE FROM messages').run();
 
-            const insertSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
-            data.settings.forEach((s: any) => insertSetting.run(s.key, s.value));
-
-            if (data.pages) {
-                const insertPage = db.prepare('INSERT INTO pages (id, title, slug, content, bg_image, is_active) VALUES (?, ?, ?, ?, ?, ?)');
-                data.pages.forEach((p: any) => insertPage.run(p.id, p.title, p.slug, p.content, p.bg_image, p.is_active));
+            if (data.settings && Array.isArray(data.settings)) {
+                console.log(`${data.settings.length} adet ayar yüklenecek.`);
+                const insertSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
+                data.settings.forEach((s: any) => insertSetting.run(s.key, s.value));
             }
 
-            if (data.sections) {
+            if (data.pages && Array.isArray(data.pages)) {
+                console.log(`${data.pages.length} adet sayfa yüklenecek.`);
+                const insertPage = db.prepare('INSERT INTO pages (id, title, slug, content, bg_image, is_active, meta_title, meta_description, meta_keywords) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                data.pages.forEach((p: any) => insertPage.run(p.id, p.title, p.slug, p.content, p.bg_image || '', p.is_active || 1, p.meta_title || '', p.meta_description || '', p.meta_keywords || ''));
+            }
+
+            if (data.sections && Array.isArray(data.sections)) {
+                console.log(`${data.sections.length} adet bölüm yüklenecek.`);
                 const insertSection = db.prepare('INSERT INTO sections (id, title, subtitle, content, image_url) VALUES (?, ?, ?, ?, ?)');
                 data.sections.forEach((s: any) => insertSection.run(s.id, s.title, s.subtitle, s.content, s.image_url));
             }
 
-            if (data.menus) {
+            if (data.menus && Array.isArray(data.menus)) {
+                console.log(`${data.menus.length} adet menü yüklenecek.`);
                 const insertMenu = db.prepare('INSERT INTO menus (id, title, path, parent_id, sort_order) VALUES (?, ?, ?, ?, ?)');
                 data.menus.forEach((m: any) => insertMenu.run(m.id, m.title, m.path, m.parent_id, m.sort_order));
             }
 
-            if (data.services) {
+            if (data.services && Array.isArray(data.services)) {
+                console.log(`${data.services.length} adet hizmet yüklenecek.`);
                 const insertService = db.prepare('INSERT INTO services (id, title, description, icon, sort_order) VALUES (?, ?, ?, ?, ?)');
                 data.services.forEach((s: any) => insertService.run(s.id, s.title, s.description, s.icon, s.sort_order));
             }
 
-            if (data.lawyers) {
-                const insertLawyer = db.prepare('INSERT INTO lawyers (id, name, title, bio, image_url, sort_order) VALUES (?, ?, ?, ?, ?, ?)');
-                data.lawyers.forEach((l: any) => insertLawyer.run(l.id, l.name, l.title, l.bio, l.image_url, l.sort_order));
+            if (data.lawyers && Array.isArray(data.lawyers)) {
+                console.log(`${data.lawyers.length} adet avukat yüklenecek.`);
+                const insertLawyer = db.prepare('INSERT INTO lawyers (id, name, title, bio, image_url, linkedin_url, instagram_url, facebook_url, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                data.lawyers.forEach((l: any) => insertLawyer.run(l.id, l.name, l.title, l.bio, l.image_url, l.linkedin_url || '', l.instagram_url || '', l.facebook_url || '', l.sort_order));
+            }
+
+            if (data.messages && Array.isArray(data.messages)) {
+                console.log(`${data.messages.length} adet mesaj yüklenecek.`);
+                const insertMessage = db.prepare('INSERT INTO messages (id, name, email, message, created_at, is_read) VALUES (?, ?, ?, ?, ?, ?)');
+                data.messages.forEach((m: any) => insertMessage.run(m.id, m.name, m.email, m.message, m.created_at, m.is_read || 0));
             }
         });
 
         transaction();
-        res.json({ success: true, message: 'Sunucu yedeği başarıyla geri yüklendi.' });
+        console.log('Bulut geri yükleme işlemi veritabanında tamamlandı.');
+        res.json({ success: true, message: 'Bulut yedeği Firebase üzerinden başarıyla geri yüklendi.' });
     } catch (error) {
         console.error('Cloud restore error:', error);
-        res.status(500).json({ error: 'Veri buluttan geri yüklenirken hata oluştu.' });
+        res.status(500).json({ error: `Veri buluttan geri yüklenirken hata oluştu: ${error instanceof Error ? error.message : String(error)}` });
     }
 });
 

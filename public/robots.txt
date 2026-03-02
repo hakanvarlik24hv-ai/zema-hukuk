@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://zema-hukuk.web.app/sitemap.xml

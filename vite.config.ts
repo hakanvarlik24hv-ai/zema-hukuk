@@ -4,40 +4,40 @@ import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, '.', '');
-  return {
-    plugins: [react(), tailwindcss()],
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-    },
-    resolve: {
-      alias: {
-        '@': path.resolve(__dirname, '.'),
-      },
-    },
-    server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
-      hmr: process.env.DISABLE_HMR !== 'true',
-      proxy: {
-        '/api': {
-          target: 'http://localhost:3001',
-          changeOrigin: true,
+    const env = loadEnv(mode, '.', '');
+    return {
+        plugins: [react(), tailwindcss()],
+        define: {
+            'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         },
-      },
-    },
-    build: {
-      reportCompressedSize: false,
-      rollupOptions: {
-        output: {
-          manualChunks: {
-            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-            'vendor-motion': ['motion'],
-            'vendor-lucide': ['lucide-react'],
-          },
+        resolve: {
+            alias: {
+                '@': path.resolve(__dirname, '.'),
+            },
         },
-      },
-      chunkSizeWarningLimit: 1000,
-    },
-  };
+        server: {
+            // HMR is disabled in AI Studio via DISABLE_HMR env var.
+            // Do not modify—file watching is disabled to prevent flickering during agent edits.
+            hmr: process.env.DISABLE_HMR !== 'true',
+            proxy: {
+                '/api': {
+                    target: 'http://localhost:3001',
+                    changeOrigin: true,
+                },
+            },
+        },
+        build: {
+            reportCompressedSize: false,
+            rollupOptions: {
+                output: {
+                    manualChunks: {
+                        'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+                        'vendor-motion': ['motion'],
+                        'vendor-lucide': ['lucide-react'],
+                    },
+                },
+            },
+            chunkSizeWarningLimit: 1000,
+        },
+    };
 });

@@ -6,25 +6,59 @@ import {
     fetchMenus, saveMenu, deleteMenu,
     fetchServices, saveService, deleteService,
     fetchLawyers, saveLawyer, deleteLawyer,
-    verifyPassword, exportBackup, importBackup, cloudSave, cloudRestore
+    verifyPassword, exportBackup, importBackup, cloudSave, cloudRestore,
+    fetchMessages, markMessageRead, deleteMessage
 } from './api';
 import {
     Save, Plus, Trash2, Edit2, X, Check, Settings,
     FileText, Layout, Menu as MenuIcon, ChevronDown, ChevronRight, Briefcase,
     Users as TeamIcon, Home, Lock, Eye, EyeOff,
-    Download, CloudUpload, RefreshCw
+    Download, CloudUpload, RefreshCw, Search, Share2, Globe, HelpCircle,
+    Linkedin, Instagram, Facebook, Mail, MessageSquare
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 
+const InfoTooltip = ({ text, example }: { text: string; example: string }) => {
+    const [isVisible, setIsVisible] = useState(false);
+    return (
+        <div className="relative inline-block ml-2 align-middle">
+            <HelpCircle
+                size={14}
+                className="text-gold-500/40 hover:text-gold-500 cursor-help transition-colors"
+                onMouseEnter={() => setIsVisible(true)}
+                onMouseLeave={() => setIsVisible(false)}
+            />
+            <AnimatePresence>
+                {isVisible && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-4 bg-black/95 border border-gold-500/20 backdrop-blur-xl rounded-xl shadow-2xl z-[70] pointer-events-none"
+                    >
+                        <p className="text-[10px] text-gold-100/90 leading-relaxed mb-2 uppercase tracking-[0.05em] font-medium">{text}</p>
+                        <div className="pt-2 border-t border-gold-500/10">
+                            <span className="text-[8px] font-bold text-gold-500 uppercase block mb-1">ÖRNEK:</span>
+                            <p className="text-[9px] text-gold-500/60 font-light italic leading-relaxed">{example}</p>
+                        </div>
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-gold-500/20"></div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+};
+
 const Admin = () => {
-    const [activeTab, setActiveTab] = useState<'settings' | 'pages' | 'sections' | 'menus' | 'services' | 'lawyers'>('settings');
+    const [activeTab, setActiveTab] = useState<'settings' | 'pages' | 'sections' | 'menus' | 'services' | 'lawyers' | 'seo' | 'messages'>('settings');
     const [settings, setSettings] = useState<any>({});
     const [pages, setPages] = useState<any[]>([]);
     const [sections, setSections] = useState<any[]>([]);
     const [menus, setMenus] = useState<any[]>([]);
     const [services, setServices] = useState<any[]>([]);
     const [lawyers, setLawyers] = useState<any[]>([]);
+    const [messages, setMessages] = useState<any[]>([]);
 
     const [editingPage, setEditingPage] = useState<any>(null);
     const [editingSection, setEditingSection] = useState<any>(null);
@@ -51,13 +85,14 @@ const Admin = () => {
     const loadData = async () => {
         setIsDataLoading(true);
         try {
-            const [settingsData, pagesData, sectionsData, menusData, servicesData, lawyersData] = await Promise.all([
+            const [settingsData, pagesData, sectionsData, menusData, servicesData, lawyersData, messagesData] = await Promise.all([
                 fetchSettings(),
                 fetchPages(),
                 fetchSections(),
                 fetchMenus(),
                 fetchServices(),
-                fetchLawyers()
+                fetchLawyers(),
+                fetchMessages()
             ]);
             setSettings(settingsData);
             setPages(pagesData);
@@ -65,6 +100,7 @@ const Admin = () => {
             setMenus(menusData);
             setServices(servicesData);
             setLawyers(lawyersData);
+            setMessages(messagesData || []);
         } catch (error) {
             console.error('Error loading data:', error);
         } finally {
@@ -307,7 +343,7 @@ const Admin = () => {
     if (!isAuthenticated) {
         return (
             <div className="min-h-screen bg-dark-950 flex items-center justify-center p-6 bg-[url('https://i.ibb.co/Y7XzXKd2/arkaplan11.png')] bg-cover bg-scroll">
-                <div className="absolute inset-0 bg-black/80 backdrop-blur-sm pointer-events-none" />
+                <div className="absolute inset-0 bg-black/60 pointer-events-none" />
                 <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -394,11 +430,13 @@ const Admin = () => {
                 <div className="flex flex-wrap gap-4 mb-8">
                     {[
                         { id: 'settings', icon: Settings, label: 'AYARLAR' },
+                        { id: 'messages', icon: MessageSquare, label: 'MESAJLAR' },
                         { id: 'menus', icon: MenuIcon, label: 'MENÜ' },
                         { id: 'pages', icon: FileText, label: 'SAYFALAR' },
                         { id: 'sections', icon: Layout, label: 'BÖLÜMLER' },
                         { id: 'services', icon: Briefcase, label: 'HİZMETLER' },
                         { id: 'lawyers', icon: TeamIcon, label: 'EKİBİMİZ' },
+                        { id: 'seo', icon: Search, label: 'SEO & PAZARLAMA' },
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -416,9 +454,15 @@ const Admin = () => {
                         <form onSubmit={handleSettingsSave} className="glass-card p-8 space-y-6">
                             <h2 className="text-xl font-display font-bold text-gold-200 mb-4 border-b border-gold-500/10 pb-4">GENEL AYARLAR</h2>
                             <div className="grid md:grid-cols-2 gap-6">
-                                {Object.keys(settings).filter(key => key !== 'admin_password').map((key) => (
+                                {Object.keys(settings).filter(key =>
+                                    key !== 'admin_password' &&
+                                    !key.startsWith('seo_') &&
+                                    key !== 'google_analytics_id' &&
+                                    key !== 'robots_txt' &&
+                                    key !== 'contact_map_html'
+                                ).map((key) => (
                                     <div key={key} className="space-y-2">
-                                        <label className="text-xs font-bold tracking-widest text-gold-500 uppercase">{key.replace('_', ' ')}</label>
+                                        <label className="text-xs font-bold tracking-widest text-gold-500 uppercase">{key.replace(/_/g, ' ')}</label>
                                         <input
                                             type="text"
                                             value={settings[key] || ''}
@@ -428,6 +472,20 @@ const Admin = () => {
                                     </div>
                                 ))}
                             </div>
+
+                            <div className="space-y-2 pt-4">
+                                <label className="text-xs font-bold tracking-widest text-gold-500 uppercase flex items-center gap-2">
+                                    HARİTA EMBED KODU (IFRAME)
+                                    <InfoTooltip text="Google Haritalar'dan aldığınız <iframe> ile başlayan yerleştirme kodunu buraya yapıştırın." example='<iframe src="https://www.google.com/maps/embed?..." width="600" height="450" ...></iframe>' />
+                                </label>
+                                <textarea
+                                    value={settings.contact_map_html || ''}
+                                    onChange={(e) => setSettings({ ...settings, contact_map_html: e.target.value })}
+                                    className="w-full bg-black/40 border border-gold-500/20 p-3 text-gold-100 focus:border-gold-500 outline-none h-32 font-mono text-sm"
+                                    placeholder='<iframe ...></iframe>'
+                                />
+                            </div>
+
                             <button type="submit" className="btn-gold-action w-full justify-center">
                                 <Save size={20} /> AYARLARI KAYDET
                             </button>
@@ -520,6 +578,178 @@ const Admin = () => {
                     </div>
                 )}
 
+                {/* SEO & Marketing Tab */}
+                {activeTab === 'seo' && (
+                    <div className="space-y-8">
+                        <form onSubmit={handleSettingsSave} className="glass-card p-10 space-y-12">
+                            <div className="flex items-center gap-4 border-b border-gold-500/10 pb-6">
+                                <Search size={28} className="text-gold-500" />
+                                <div>
+                                    <h2 className="text-2xl font-display font-bold text-gradient-gold uppercase tracking-tighter">SEO & Pazarlama Yönetimi</h2>
+                                    <p className="text-gold-100/40 text-xs mt-1 uppercase tracking-widest">Sitenizi Google ve Sosyal Medya için Optimize Edin</p>
+                                </div>
+                            </div>
+
+                            <div className="grid lg:grid-cols-2 gap-12">
+                                {/* Global SEO */}
+                                <div className="space-y-6">
+                                    <h3 className="text-sm font-bold text-gold-500 tracking-[0.3em] uppercase flex items-center gap-2">
+                                        <Globe size={16} /> Arama Motoru Ayarları
+                                    </h3>
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <div className="flex items-center">
+                                                <label className="text-[10px] font-bold text-gold-500/60 tracking-widest uppercase">Global Meta Başlık (Title)</label>
+                                                <InfoTooltip text="Sitenin Google aramalarında görünen ana başlığıdır." example="Zema Hukuk & Arabuluculuk | İstanbul Hukuk Bürosu" />
+                                            </div>
+                                            <input
+                                                type="text"
+                                                value={settings.seo_title || ''}
+                                                onChange={(e) => setSettings({ ...settings, seo_title: e.target.value })}
+                                                className="w-full bg-black/40 border border-gold-500/20 p-4 text-gold-100 focus:border-gold-500 outline-none transition-all"
+                                                placeholder="Örn: Zema Hukuk | Modern Hukuk Çözümleri"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <div className="flex items-center">
+                                                <label className="text-[10px] font-bold text-gold-500/60 tracking-widest uppercase">Meta Açıklama (Description)</label>
+                                                <InfoTooltip text="Google arama sonuçlarında başlığın altında çıkan kısa tanıtım yazısıdır." example="Zema Hukuk, İstanbul'da uzman kadrosuyla profesyonel hukuk ve danışmanlık hizmetleri sunar." />
+                                            </div>
+                                            <textarea
+                                                rows={4}
+                                                value={settings.seo_description || ''}
+                                                onChange={(e) => setSettings({ ...settings, seo_description: e.target.value })}
+                                                className="w-full bg-black/40 border border-gold-500/20 p-4 text-gold-100 focus:border-gold-500 outline-none transition-all resize-none"
+                                                placeholder="Arama sonuçlarında sitenizin altında görünecek olan kısa açıklama..."
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <div className="flex items-center">
+                                                <label className="text-[10px] font-bold text-gold-500/60 tracking-widest uppercase">Anahtar Kelimeler (Keywords)</label>
+                                                <InfoTooltip text="Arama motorlarının sitenizi kategorize etmesine yardımcı olan kelimelerdir." example="avukat, istanbul hukuk bürosu, boşanma avukatı, ceza hukuku" />
+                                            </div>
+                                            <input
+                                                type="text"
+                                                value={settings.seo_keywords || ''}
+                                                onChange={(e) => setSettings({ ...settings, seo_keywords: e.target.value })}
+                                                className="w-full bg-black/40 border border-gold-500/20 p-4 text-gold-100 focus:border-gold-500 outline-none transition-all"
+                                                placeholder="avukat, hukuk bürosu, istanbul, dava..."
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Social Media & Analytics */}
+                                <div className="space-y-6">
+                                    <h3 className="text-sm font-bold text-gold-500 tracking-[0.3em] uppercase flex items-center gap-2">
+                                        <Share2 size={16} /> Sosyal Paylaşım & Analitik
+                                    </h3>
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <div className="flex items-center">
+                                                <label className="text-[10px] font-bold text-gold-500/60 tracking-widest uppercase">Paylaşım Görseli (OG Image URL)</label>
+                                                <InfoTooltip text="Siteniz sosyal medyada paylaşıldığında (WhatsApp vb.) görünecek olan resmin linkidir." example="https://zemahukuk.com/images/og-main.jpg" />
+                                            </div>
+                                            <input
+                                                type="text"
+                                                value={settings.seo_og_image || ''}
+                                                onChange={(e) => setSettings({ ...settings, seo_og_image: e.target.value })}
+                                                className="w-full bg-black/40 border border-gold-500/20 p-4 text-gold-100 focus:border-gold-500 outline-none transition-all"
+                                                placeholder="https://..."
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <div className="flex items-center">
+                                                <label className="text-[10px] font-bold text-gold-500/60 tracking-widest uppercase">Google Analytics ID</label>
+                                                <InfoTooltip text="Ziyaretçi trafiğini izlemek için kullanılan Google ölçüm kodudur." example="G-QLTVSG3N79" />
+                                            </div>
+                                            <input
+                                                type="text"
+                                                value={settings.google_analytics_id || ''}
+                                                onChange={(e) => setSettings({ ...settings, google_analytics_id: e.target.value })}
+                                                className="w-full bg-black/40 border border-gold-500/20 p-4 text-gold-100 focus:border-gold-500 outline-none transition-all"
+                                                placeholder="G-XXXXXXX"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <div className="flex items-center">
+                                                <label className="text-[10px] font-bold text-gold-500/60 tracking-widest uppercase">Robots.txt İçeriği</label>
+                                                <InfoTooltip text="Google botlarının sitenin nerelerini tarayacağını belirleyen talimatlardır." example="User-agent: * \n Allow: /" />
+                                            </div>
+                                            <textarea
+                                                rows={3}
+                                                value={settings.robots_txt || ''}
+                                                onChange={(e) => setSettings({ ...settings, robots_txt: e.target.value })}
+                                                className="w-full bg-black/40 border border-gold-500/20 p-4 text-gold-100 font-mono text-xs focus:border-gold-500 outline-none transition-all resize-none"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button type="submit" className="btn-gold-action w-full justify-center py-6 mt-6">
+                                <Save size={20} /> SEO AYARLARINI GÜNCELLE
+                            </button>
+                        </form>
+                    </div>
+                )}
+
+                {/* Messages Tab */}
+                {activeTab === 'messages' && (
+                    <div className="space-y-6">
+                        <div className="grid gap-4">
+                            {messages.length === 0 ? (
+                                <div className="glass-card p-12 text-center text-gold-500/40 font-bold tracking-widest uppercase">
+                                    Henüz mesaj bulunmuyor.
+                                </div>
+                            ) : (
+                                messages.map((message) => (
+                                    <div key={message.id} className={`glass-card p-6 flex flex-col gap-4 transition-all ${message.is_read ? 'opacity-70' : 'border-l-4 border-gold-500'}`}>
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <h3 className="text-gold-200 font-display font-bold text-lg mb-1">{message.name}</h3>
+                                                <div className="flex gap-4 text-xs text-gold-500/60 font-bold tracking-widest uppercase items-center">
+                                                    <a href={`mailto:${message.email}`} className="hover:text-gold-400 transition-colors flex items-center gap-1"><Mail size={12} /> {message.email}</a>
+                                                    <span>•</span>
+                                                    <span>{new Date(message.created_at).toLocaleString('tr-TR')}</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                {!message.is_read && (
+                                                    <button
+                                                        onClick={async () => {
+                                                            await markMessageRead(message.id);
+                                                            loadData();
+                                                        }}
+                                                        className="p-2 bg-gold-900/20 text-gold-500 hover:bg-gold-500 hover:text-black border border-gold-500/20 transition-all font-bold text-[10px] tracking-widest uppercase rounded flex items-center gap-1"
+                                                    >
+                                                        <Check size={14} /> OKUNDU İŞARETLE
+                                                    </button>
+                                                )}
+                                                <button
+                                                    onClick={async () => {
+                                                        if (window.confirm('Mesajı silmek istediğinize emin misiniz?')) {
+                                                            await deleteMessage(message.id);
+                                                            loadData();
+                                                        }
+                                                    }}
+                                                    className="p-2 bg-red-900/10 hover:bg-red-900/30 text-red-500/70 hover:text-red-500 border border-red-500/20 transition-all rounded"
+                                                    title="Sil"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="text-gold-100/80 leading-relaxed font-light mt-2 p-4 bg-black/30 rounded-lg border border-gold-500/10 whitespace-pre-line">
+                                            {message.message}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 {/* Menus Tab */}
                 {activeTab === 'menus' && (
                     <div className="space-y-6">
@@ -542,7 +772,7 @@ const Admin = () => {
                     <div className="space-y-6">
                         <div className="flex justify-end">
                             <button
-                                onClick={() => setEditingPage({ title: '', slug: '', content: '' })}
+                                onClick={() => setEditingPage({ title: '', slug: '', content: '', meta_title: '', meta_description: '', meta_keywords: '' })}
                                 className="btn-gold-action"
                             >
                                 <Plus size={20} /> YENİ SAYFA EKLE
@@ -638,7 +868,7 @@ const Admin = () => {
                     <div className="space-y-6">
                         <div className="flex justify-end">
                             <button
-                                onClick={() => setEditingLawyer({ name: '', title: '', bio: '', image_url: '', sort_order: lawyers.length })}
+                                onClick={() => setEditingLawyer({ name: '', title: '', bio: '', image_url: '', linkedin_url: '', instagram_url: '', facebook_url: '', sort_order: lawyers.length })}
                                 className="btn-gold-action"
                             >
                                 <Plus size={20} /> YENİ AVUKAT EKLE
@@ -772,7 +1002,21 @@ const Admin = () => {
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-gold-500 uppercase">İçerik (HTML)</label>
-                                    <textarea rows={12} value={editingPage.content} onChange={e => setEditingPage({ ...editingPage, content: e.target.value })} className="w-full bg-black/40 border border-gold-500/20 p-3 text-gold-100 resize-none"></textarea>
+                                    <textarea rows={8} value={editingPage.content} onChange={e => setEditingPage({ ...editingPage, content: e.target.value })} className="w-full bg-black/40 border border-gold-500/20 p-3 text-gold-100 resize-none"></textarea>
+                                </div>
+                                <div className="grid md:grid-cols-2 gap-4 border-t border-gold-500/10 pt-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-gold-500 uppercase">Sayfa SEO Başlığı (Opsiyonel)</label>
+                                        <input type="text" value={editingPage.meta_title || ''} onChange={e => setEditingPage({ ...editingPage, meta_title: e.target.value })} placeholder="Başlık boşsa sayfa adı kullanılır" className="w-full bg-black/40 border border-gold-500/20 p-3 text-gold-100 outline-none focus:border-gold-500" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-gold-500 uppercase">Sayfa SEO Anahtar Kelimeler</label>
+                                        <input type="text" value={editingPage.meta_keywords || ''} onChange={e => setEditingPage({ ...editingPage, meta_keywords: e.target.value })} placeholder="kelime1, kelime2..." className="w-full bg-black/40 border border-gold-500/20 p-3 text-gold-100 outline-none focus:border-gold-500" />
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-gold-500 uppercase">Sayfa SEO Açıklaması</label>
+                                    <textarea rows={2} value={editingPage.meta_description || ''} onChange={e => setEditingPage({ ...editingPage, meta_description: e.target.value })} placeholder="Sayfaya özel meta açıklaması..." className="w-full bg-black/40 border border-gold-500/20 p-3 text-gold-100 outline-none focus:border-gold-500 resize-none"></textarea>
                                 </div>
                                 <div className="flex gap-4 pt-4">
                                     <button type="submit" className="flex-1 btn-gold-action justify-center"><Check size={20} /> KAYDET</button>
@@ -827,6 +1071,20 @@ const Admin = () => {
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-gold-500 uppercase">RESİM URL</label>
                                     <input type="text" required value={editingLawyer.image_url} onChange={e => setEditingLawyer({ ...editingLawyer, image_url: e.target.value })} className="w-full bg-black/40 border border-gold-500/20 p-3 text-gold-100 focus:border-gold-500 outline-none" />
+                                </div>
+                                <div className="grid md:grid-cols-3 gap-6">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-gold-500 uppercase flex items-center gap-2"><Linkedin size={12} /> LINKEDIN URL</label>
+                                        <input type="text" value={editingLawyer.linkedin_url || ''} onChange={e => setEditingLawyer({ ...editingLawyer, linkedin_url: e.target.value })} className="w-full bg-black/40 border border-gold-500/20 p-3 text-gold-100 focus:border-gold-500 outline-none" placeholder="https://linkedin.com/in/..." />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-gold-500 uppercase flex items-center gap-2"><Instagram size={12} /> INSTAGRAM URL</label>
+                                        <input type="text" value={editingLawyer.instagram_url || ''} onChange={e => setEditingLawyer({ ...editingLawyer, instagram_url: e.target.value })} className="w-full bg-black/40 border border-gold-500/20 p-3 text-gold-100 focus:border-gold-500 outline-none" placeholder="https://instagram.com/..." />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-gold-500 uppercase flex items-center gap-2"><Facebook size={12} /> FACEBOOK URL</label>
+                                        <input type="text" value={editingLawyer.facebook_url || ''} onChange={e => setEditingLawyer({ ...editingLawyer, facebook_url: e.target.value })} className="w-full bg-black/40 border border-gold-500/20 p-3 text-gold-100 focus:border-gold-500 outline-none" placeholder="https://facebook.com/..." />
+                                    </div>
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-gold-500 uppercase">ÖZGEÇMİŞ (BİO)</label>

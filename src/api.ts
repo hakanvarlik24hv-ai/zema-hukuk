@@ -1,3 +1,6 @@
+import { db_cloud } from './firebase';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+
 let authToken = localStorage.getItem('admin_token') || '';
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -10,8 +13,19 @@ export const setAuthToken = (token: string) => {
     }
 };
 
+const apiCache = new Map<string, { data: any, timestamp: number }>();
+const CACHE_DURATION = 1000 * 60 * 5; // 5 minutes
+
 const secureFetch = async (url: string, options: any = {}) => {
-    const headers = {
+    const isGet = !options.method || options.method === 'GET';
+    if (isGet && apiCache.has(url)) {
+        const cached = apiCache.get(url)!;
+        if (Date.now() - cached.timestamp < CACHE_DURATION) {
+            return cached.data;
+        }
+    }
+
+    const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         ...options.headers,
     };
@@ -20,12 +34,23 @@ const secureFetch = async (url: string, options: any = {}) => {
         headers['Authorization'] = authToken;
     }
 
-    const response = await fetch(url, { ...options, headers });
-    if (response.status === 401 || response.status === 403) {
-        // If unauthorized, clear token
-        setAuthToken('');
+    try {
+        const response = await fetch(url, { ...options, headers });
+        if (response.status === 401 || response.status === 403) {
+            setAuthToken('');
+            throw new Error('Unauthorized');
+        }
+        const data = await response.json();
+        if (isGet) {
+            apiCache.set(url, { data, timestamp: Date.now() });
+        } else {
+            apiCache.clear();
+        }
+        return data;
+    } catch (error) {
+        console.error(`API Error (${url}):`, error);
+        throw error;
     }
-    return response.json();
 };
 
 export const fetchSettings = async () => secureFetch(`${API_BASE}/api/settings`);
@@ -93,5 +118,73 @@ export const importBackup = async (data: any) => secureFetch(`${API_BASE}/api/ba
     body: JSON.stringify(data)
 });
 
-export const cloudSave = async () => secureFetch(`${API_BASE}/api/backup/direct-save`, { method: 'POST' });
-export const cloudRestore = async () => secureFetch(`${API_BASE}/api/backup/direct-restore`, { method: 'POST' });
+// --- Cloud Save/Restore: Directly via Firestore from Frontend ---
+
+export const cloudSave = async () => {
+    try {
+        const [settings, pages, sections, menus, services, lawyers] = await Promise.all([
+            fetchSettings(),
+            fetchPages(),
+            fetchSections(),
+            fetchMenus(),
+            fetchServices(),
+            fetchLawyers(),
+        ]);
+
+        const backupData = {
+            settings,
+            pages,
+            sections,
+            menus,
+            services,
+            lawyers,
+            export_date: new Date().toISOString(),
+            version: '2.0',
+        };
+
+        const backupRef = doc(db_cloud, 'site_management', 'latest_backup');
+        await setDoc(backupRef, {
+            data: JSON.stringify(backupData),
+            updated_at: new Date().toISOString(),
+        });
+
+        return { success: true, message: 'Veriler Firestore Bulut Veritabanına başarıyla yedeklendi.' };
+    } catch (error: any) {
+        console.error('Cloud save error:', error);
+        return { success: false, error: `Buluta kaydetme hatası: ${error.message}` };
+    }
+};
+
+export const cloudRestore = async () => {
+    try {
+        const backupRef = doc(db_cloud, 'site_management', 'latest_backup');
+        const docSnap = await getDoc(backupRef);
+
+        if (!docSnap.exists()) {
+            return { success: false, error: 'Henüz bir bulut yedeği bulunamadı.' };
+        }
+
+        const cloudData = docSnap.data();
+        const data = JSON.parse(cloudData.data);
+
+        const result = await secureFetch(`${API_BASE}/api/backup/import`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+
+        return result;
+    } catch (error: any) {
+        console.error('Cloud restore error:', error);
+        return { success: false, error: `Buluttan geri yükleme hatası: ${error.message}` };
+    }
+};
+
+// --- Messages API ---
+export const fetchMessages = async () => secureFetch(`${API_BASE}/api/messages`);
+export const sendMessage = async (message: any) => secureFetch(`${API_BASE}/api/messages`, {
+    method: 'POST',
+    body: JSON.stringify(message)
+});
+export const markMessageRead = async (id: number) => secureFetch(`${API_BASE}/api/messages/${id}/read`, { method: 'PUT' });
+export const deleteMessage = async (id: number) => secureFetch(`${API_BASE}/api/messages/${id}`, { method: 'DELETE' });
+
