@@ -427,7 +427,7 @@ const Admin = () => {
                     </div>
                 </div>
 
-                <div className="flex flex-wrap gap-4 mb-8">
+                <div className="flex flex-wrap items-center justify-center gap-2 mb-10 bg-black/40 p-2 flex-col md:flex-row rounded-xl border border-gold-500/10 backdrop-blur-md">
                     {[
                         { id: 'settings', icon: Settings, label: 'AYARLAR' },
                         { id: 'messages', icon: MessageSquare, label: 'MESAJLAR' },
@@ -436,14 +436,17 @@ const Admin = () => {
                         { id: 'sections', icon: Layout, label: 'BÖLÜMLER' },
                         { id: 'services', icon: Briefcase, label: 'HİZMETLER' },
                         { id: 'lawyers', icon: TeamIcon, label: 'EKİBİMİZ' },
-                        { id: 'seo', icon: Search, label: 'SEO & PAZARLAMA' },
+                        { id: 'seo', icon: Search, label: 'SEO/PAZARLAMA' },
                     ].map(tab => (
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id as any)}
-                            className={`flex items-center gap-2 px-6 py-3 rounded-sm font-display font-bold transition-all ${activeTab === tab.id ? 'bg-gold-600 text-white' : 'bg-white/5 text-gold-500/60 hover:bg-white/10'}`}
+                            className={`flex flex-1 w-full md:w-auto min-w-[110px] items-center justify-center gap-2 px-3 py-3 rounded-lg font-bold text-[10px] tracking-widest transition-all uppercase ${activeTab === tab.id
+                                    ? 'bg-gold-500 text-dark-950 shadow-lg shadow-gold-500/20'
+                                    : 'text-gold-500/60 hover:text-gold-300 hover:bg-white/5'
+                                }`}
                         >
-                            <tab.icon size={18} /> {tab.label}
+                            <tab.icon size={14} /> <span className="whitespace-nowrap">{tab.label}</span>
                         </button>
                     ))}
                 </div>
