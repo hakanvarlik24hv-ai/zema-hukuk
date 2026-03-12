@@ -32,6 +32,7 @@ const db_cloud = initializeFirestore(firebaseApp, {
 });
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || process.env.VITE_FIREBASE_API_KEY || '');
+console.log('Gemini API Key loaded:', !!process.env.GEMINI_API_KEY, 'Fallback Key loaded:', !!process.env.VITE_FIREBASE_API_KEY);
 
 const app = express();
 const port = process.env.PORT || 3001;
